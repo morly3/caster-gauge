@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Caster Angle Gauge</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0e17;
+    --surface: #131a2b;
+    --border: #1e2a42;
+    --text: #e0e6f0;
+    --text-dim: #6b7a94;
+    --accent: #00d4aa;
+    --accent-dim: rgba(0, 212, 170, 0.15);
+    --warn: #ff6b6b;
+    --blue: #4ea8de;
+  }
+
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .header {
+    padding: 16px 20px 8px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+  }
+  .header h1 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--accent);
+  }
+  .header .sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  .main-display {
+    padding: 16px 20px;
+  }
+
+  .angle-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .angle-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 8px;
+    text-align: center;
+  }
+  .angle-card .label {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .angle-card .value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    margin: 4px 0;
+    min-height: 38px;
+    line-height: 38px;
+  }
+  .angle-card .unit {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .angle-card.yaw .value { color: var(--blue); }
+  .angle-card.pitch .value { color: var(--accent); }
+  .angle-card.roll .value { color: #c084fc; }
+
+  .result-card {
+    background: linear-gradient(135deg, rgba(0,212,170,0.08), rgba(78,168,222,0.08));
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .result-card .label {
+    font-size: 12px;
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 1px;
+  }
+  .result-card .value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 42px;
+    font-weight: 700;
+    color: var(--text);
+    margin: 4px 0;
+  }
+  .result-card .hint {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 0 20px;
+  }
+
+  .btn-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 14px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--text);
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active {
+    transform: scale(0.97);
+  }
+  .btn.primary {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+  }
+  .btn.primary:active {
+    background: #00b893;
+  }
+  .btn.danger {
+    border-color: var(--warn);
+    color: var(--warn);
+  }
+  .btn.recording {
+    background: var(--warn);
+    color: #fff;
+    border-color: var(--warn);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  .log-section {
+    padding: 16px 20px;
+  }
+  .log-section h3 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+
+  .log-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+  th {
+    background: var(--surface);
+    color: var(--text-dim);
+    padding: 8px 6px;
+    text-align: right;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    border-bottom: 1px solid var(--border);
+  }
+  th:first-child { text-align: left; }
+  td {
+    padding: 6px;
+    text-align: right;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+  td:first-child { text-align: left; color: var(--text-dim); }
+
+  .status-bar {
+    padding: 10px 20px;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .status-bar.error { color: var(--warn); }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .overlay-content {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px 24px;
+    text-align: center;
+    max-width: 320px;
+    width: 90%;
+  }
+  .overlay-content h2 {
+    font-size: 18px;
+    margin-bottom: 12px;
+    color: var(--accent);
+  }
+  .overlay-content p {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 20px;
+    line-height: 1.6;
+  }
+
+  .hidden { display: none !important; }
+
+  .steer-info {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: center;
+    padding: 8px 20px 0;
+    font-family: 'JetBrains Mono', monospace;
+  }
+</style>
+</head>
+<body>
+
+<!-- Permission overlay for iOS -->
+<div id="permOverlay" class="overlay hidden">
+  <div class="overlay-content">
+    <h2>センサー許可</h2>
+    <p>ジャイロ・加速度センサーへのアクセスを許可してください。</p>
+    <button class="btn primary" onclick="requestPermission()" style="width:100%">許可する</button>
+  </div>
+</div>
+
+<div class="header">
+  <h1>CASTER GAUGE</h1>
+  <div class="sub">DeviceOrientation キャスター角測定</div>
+</div>
+
+<div class="main-display">
+  <div class="angle-grid">
+    <div class="angle-card yaw">
+      <div class="label">転舵角 (Yaw)</div>
+      <div class="value" id="yawVal">--</div>
+      <div class="unit">deg</div>
+    </div>
+    <div class="angle-card pitch">
+      <div class="label">前後傾斜 (Pitch)</div>
+      <div class="value" id="pitchVal">--</div>
+      <div class="unit">deg</div>
+    </div>
+    <div class="angle-card roll">
+      <div class="label">左右傾斜 (Roll)</div>
+      <div class="value" id="rollVal">--</div>
+      <div class="unit">deg</div>
+    </div>
+  </div>
+
+  <div class="result-card">
+    <div class="label">CASTER ANGLE (推定)</div>
+    <div class="value" id="casterVal">--</div>
+    <div class="hint" id="casterHint">記録データから算出されます</div>
+  </div>
+</div>
+
+<div class="controls">
+  <div class="btn-row">
+    <button class="btn primary" id="btnZero" onclick="setZero()">ゼロリセット</button>
+    <button class="btn" id="btnRec" onclick="toggleRecord()">● 記録開始</button>
+  </div>
+  <div class="btn-row">
+    <button class="btn" onclick="calcCaster()">キャスター算出</button>
+    <button class="btn" onclick="downloadCSV()">CSV保存</button>
+  </div>
+  <div class="btn-row">
+    <button class="btn danger" onclick="clearLog()">記録クリア</button>
+  </div>
+</div>
+
+<div class="steer-info" id="steerInfo">
+  ゲージをハブに固定 → ゼロリセット → 記録開始 → ステアリングを左右に切る → 記録停止 → 算出
+</div>
+
+<div class="log-section">
+  <h3>RECORDED DATA (<span id="logCount">0</span> pts)</h3>
+  <div class="log-table-wrap">
+    <table>
+      <thead>
+        <tr><th>t(s)</th><th>Yaw°</th><th>Pitch°</th><th>Roll°</th></tr>
+      </thead>
+      <tbody id="logBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="status-bar" id="statusBar">センサー待機中...</div>
+
+<script>
+  // State
+  let rawAlpha = 0, rawBeta = 0, rawGamma = 0;
+  let offsetAlpha = 0, offsetBeta = 0, offsetGamma = 0;
+  let yaw = 0, pitch = 0, roll = 0;
+  let sensorReady = false;
+
+  let recording = false;
+  let logData = [];
+  let recStartTime = 0;
+  let recInterval = null;
+
+  // Smooth
+  const SMOOTH = 0.3;
+  let sYaw = 0, sPitch = 0, sRoll = 0;
+
+  // iOS permission
+  function needsPermission() {
+    return typeof DeviceOrientationEvent !== 'undefined'
+      && typeof DeviceOrientationEvent.requestPermission === 'function';
+  }
+
+  function requestPermission() {
+    DeviceOrientationEvent.requestPermission().then(state => {
+      if (state === 'granted') {
+        document.getElementById('permOverlay').classList.add('hidden');
+        startListening();
+      } else {
+        setStatus('センサー許可が拒否されました', true);
+      }
+    }).catch(e => {
+      setStatus('許可リクエストエラー: ' + e.message, true);
+    });
+  }
+
+  function startListening() {
+    window.addEventListener('deviceorientation', onOrientation, true);
+    setStatus('センサー接続中...');
+  }
+
+  // Normalize angle to -180..180
+  function normAngle(a) {
+    while (a > 180) a -= 360;
+    while (a < -180) a += 360;
+    return a;
+  }
+
+  function onOrientation(e) {
+    if (e.alpha === null) return;
+    if (!sensorReady) {
+      sensorReady = true;
+      setStatus('センサー稼働中');
+      // Auto zero on first reading
+      offsetAlpha = e.alpha;
+      offsetBeta = e.beta;
+      offsetGamma = e.gamma;
+    }
+
+    rawAlpha = e.alpha;
+    rawBeta = e.beta;
+    rawGamma = e.gamma;
+
+    let newYaw = normAngle(rawAlpha - offsetAlpha);
+    let newPitch = rawBeta - offsetBeta;
+    let newRoll = rawGamma - offsetGamma;
+
+    // EMA smoothing
+    sYaw = sYaw + SMOOTH * (newYaw - sYaw);
+    sPitch = sPitch + SMOOTH * (newPitch - sPitch);
+    sRoll = sRoll + SMOOTH * (newRoll - sRoll);
+
+    yaw = sYaw;
+    pitch = sPitch;
+    roll = sRoll;
+
+    updateDisplay();
+  }
+
+  function updateDisplay() {
+    document.getElementById('yawVal').textContent = yaw.toFixed(1);
+    document.getElementById('pitchVal').textContent = pitch.toFixed(1);
+    document.getElementById('rollVal').textContent = roll.toFixed(1);
+  }
+
+  function setZero() {
+    offsetAlpha = rawAlpha;
+    offsetBeta = rawBeta;
+    offsetGamma = rawGamma;
+    sYaw = 0; sPitch = 0; sRoll = 0;
+    yaw = 0; pitch = 0; roll = 0;
+    updateDisplay();
+    setStatus('ゼロリセット完了');
+  }
+
+  function toggleRecord() {
+    const btn = document.getElementById('btnRec');
+    if (!recording) {
+      recording = true;
+      logData = [];
+      recStartTime = Date.now();
+      btn.textContent = '■ 記録停止';
+      btn.classList.add('recording');
+      // Record at ~10Hz
+      recInterval = setInterval(() => {
+        const t = ((Date.now() - recStartTime) / 1000).toFixed(2);
+        logData.push({
+          t: parseFloat(t),
+          yaw: parseFloat(yaw.toFixed(2)),
+          pitch: parseFloat(pitch.toFixed(2)),
+          roll: parseFloat(roll.toFixed(2))
+        });
+        updateLogTable();
+      }, 100);
+      setStatus('記録中...');
+    } else {
+      recording = false;
+      clearInterval(recInterval);
+      btn.textContent = '● 記録開始';
+      btn.classList.remove('recording');
+      setStatus('記録停止 (' + logData.length + ' pts)');
+    }
+  }
+
+  function updateLogTable() {
+    const tbody = document.getElementById('logBody');
+    const count = document.getElementById('logCount');
+    count.textContent = logData.length;
+
+    // Show last 50 rows for performance
+    const show = logData.slice(-50);
+    tbody.innerHTML = show.map(d =>
+      `<tr><td>${d.t}</td><td>${d.yaw}</td><td>${d.pitch}</td><td>${d.roll}</td></tr>`
+    ).join('');
+
+    // Auto scroll
+    const wrap = tbody.closest('.log-table-wrap');
+    wrap.scrollTop = wrap.scrollHeight;
+  }
+
+  function calcCaster() {
+    if (logData.length < 10) {
+      setStatus('データが不足しています（ステアリングを切りながら記録してください）', true);
+      return;
+    }
+
+    // Find max left and max right steer points
+    let maxLeft = null, maxRight = null;
+
+    for (const d of logData) {
+      if (d.yaw > 5 && (!maxRight || d.yaw > maxRight.yaw)) maxRight = d;
+      if (d.yaw < -5 && (!maxLeft || d.yaw < maxLeft.yaw)) maxLeft = d;
+    }
+
+    if (!maxLeft || !maxRight) {
+      // Try opposite sign convention
+      for (const d of logData) {
+        if (d.yaw < -5 && (!maxRight || d.yaw < maxRight.yaw)) maxRight = d;
+        if (d.yaw > 5 && (!maxLeft || d.yaw > maxLeft.yaw)) maxLeft = d;
+      }
+    }
+
+    if (!maxLeft || !maxRight) {
+      setStatus('左右に十分な転舵データがありません（±5°以上必要）', true);
+      return;
+    }
+
+    const steerAngleL = Math.abs(maxLeft.yaw);
+    const steerAngleR = Math.abs(maxRight.yaw);
+    const camberL = maxLeft.roll;
+    const camberR = maxRight.roll;
+
+    // Caster = (camber_left - camber_right) / (2 * sin(avg_steer))
+    const avgSteer = (steerAngleL + steerAngleR) / 2;
+    const avgSteerRad = avgSteer * Math.PI / 180;
+    const casterRad = (camberL - camberR) / (2 * Math.sin(avgSteerRad));
+    const casterDeg = casterRad * 180 / Math.PI;
+
+    document.getElementById('casterVal').textContent = casterDeg.toFixed(1) + '°';
+    document.getElementById('casterHint').textContent =
+      `左${steerAngleL.toFixed(1)}° (roll=${camberL.toFixed(2)}) / 右${steerAngleR.toFixed(1)}° (roll=${camberR.toFixed(2)})`;
+
+    setStatus('キャスター角算出完了');
+  }
+
+  function downloadCSV() {
+    if (logData.length === 0) {
+      setStatus('記録データがありません', true);
+      return;
+    }
+
+    let csv = 'time_s,yaw_deg,pitch_deg,roll_deg\n';
+    for (const d of logData) {
+      csv += `${d.t},${d.yaw},${d.pitch},${d.roll}\n`;
+    }
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const now = new Date();
+    const ts = now.getFullYear()
+      + String(now.getMonth()+1).padStart(2,'0')
+      + String(now.getDate()).padStart(2,'0')
+      + '_'
+      + String(now.getHours()).padStart(2,'0')
+      + String(now.getMinutes()).padStart(2,'0');
+    a.download = `caster_log_${ts}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatus('CSV保存完了');
+  }
+
+  function clearLog() {
+    logData = [];
+    document.getElementById('logBody').innerHTML = '';
+    document.getElementById('logCount').textContent = '0';
+    document.getElementById('casterVal').textContent = '--';
+    document.getElementById('casterHint').textContent = '記録データから算出されます';
+    setStatus('記録クリア');
+  }
+
+  function setStatus(msg, isError) {
+    const el = document.getElementById('statusBar');
+    el.textContent = msg;
+    el.className = 'status-bar' + (isError ? ' error' : '');
+  }
+
+  // Init
+  window.addEventListener('DOMContentLoaded', () => {
+    if (needsPermission()) {
+      document.getElementById('permOverlay').classList.remove('hidden');
+    } else if ('DeviceOrientationEvent' in window) {
+      startListening();
+    } else {
+      setStatus('このブラウザはDeviceOrientationに対応していません', true);
+    }
+  });
+</script>
+</body>
+</html>
