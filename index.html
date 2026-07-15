@@ -158,7 +158,7 @@
 
     .settings {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(3, 1fr);
       gap: 10px;
     }
 
@@ -312,17 +312,14 @@
 
     <section class="panel">
       <div class="settings">
-        <label class="field">
-          <span class="label">ホイール面法線</span>
-          <select id="normalSelect">
-            <option value="x+">+X</option>
-            <option value="x-">-X</option>
-            <option value="y+">+Y</option>
-            <option value="y-">-Y</option>
-            <option value="z+">+Z</option>
-            <option value="z-" selected>-Z</option>
-          </select>
-        </label>
+        <div class="field">
+          <span class="label">取付キャリブレーション</span>
+          <button id="screenUpBtn">画面上向きを記録</button>
+        </div>
+        <div class="field">
+          <span class="label">取付ルール</span>
+          <div class="status" id="mountStatus">画面をホイール外側へ向けて立てます</div>
+        </div>
         <label class="field">
           <span class="label">測定対象</span>
           <select id="sideSelect">
@@ -353,7 +350,7 @@
     <section class="toolbar">
       <button id="permissionBtn" class="primary">センサー許可</button>
       <button id="baselineBtn">直進基準を記録</button>
-      <button id="sampleBtn">測定点を追加</button>
+      <button id="sampleBtn">手動で測定点追加</button>
       <button id="fitBtn">ステア軸を推定</button>
       <button id="removeBtn">最後の点を削除</button>
       <button id="clearBtn" class="danger">全点クリア</button>
@@ -392,6 +389,8 @@
     const MAX_AXIS_STD = 0.08;
     const MAX_MAG_STD = 0.12;
     const MIN_FIT_POINTS = 5;
+    const AUTO_ADD_COOLDOWN_MS = 1800;
+    const AUTO_ADD_MIN_ANGLE_DEG = 3;
     const GOOD_RMS_RESIDUAL = 0.035;
     const WARN_RMS_RESIDUAL = 0.075;
     const MIN_SPREAD_RATIO = 4;
@@ -403,6 +402,9 @@
       baseline: null,
       result: null,
       sensorReady: false,
+      autoAddEnabled: false,
+      lastAutoAddAt: 0,
+      screenOutNormal: null,
       debug: new URLSearchParams(location.search).get("debug") === "1"
     };
 
@@ -420,11 +422,12 @@
       status: document.getElementById("status"),
       pointRows: document.getElementById("pointRows"),
       signHint: document.getElementById("signHint"),
-      normalSelect: document.getElementById("normalSelect"),
+      mountStatus: document.getElementById("mountStatus"),
       sideSelect: document.getElementById("sideSelect"),
       pointType: document.getElementById("pointType"),
       reverseForward: document.getElementById("reverseForward"),
       permissionBtn: document.getElementById("permissionBtn"),
+      screenUpBtn: document.getElementById("screenUpBtn"),
       baselineBtn: document.getElementById("baselineBtn"),
       sampleBtn: document.getElementById("sampleBtn"),
       fitBtn: document.getElementById("fitBtn"),
@@ -495,9 +498,23 @@
       return map[name] || map["z-"];
     }
 
+    function nearestSignedAxis(vec) {
+      const axes = [v(1, 0, 0), v(0, 1, 0), v(0, 0, 1)];
+      let best = axes[0];
+      let bestAbs = -1;
+      for (const axis of axes) {
+        const d = dot(vec, axis);
+        if (Math.abs(d) > bestAbs) {
+          bestAbs = Math.abs(d);
+          best = scale(axis, Math.sign(d || 1));
+        }
+      }
+      return best;
+    }
+
     function getFrame() {
       const verticalUp = state.baseline ? scale(state.baseline.normalized, -1) : v(0, 0, -1);
-      const wheelNormalPhone = getAxisVector(els.normalSelect.value);
+      const wheelNormalPhone = state.screenOutNormal || v(0, 0, 1);
       const lateralRaw = sub(wheelNormalPhone, scale(verticalUp, dot(wheelNormalPhone, verticalUp)));
       let lateral = normalize(lateralRaw);
 
@@ -528,7 +545,7 @@
       }
 
       // DeviceMotion の軸は端末座標系です。端末やブラウザで符号の扱いが違う場合があるため、
-      // UI のホイール面法線、左右輪、前方向反転で車両座標との対応を調整します。
+      // DeviceMotion の符号は端末差があるため、画面上向きキャリブレーションで画面側の向きを決めます。
       const sample = v(clampFinite(g.x), clampFinite(g.y), clampFinite(g.z));
       state.latestGravity = sample;
       state.sensorReady = true;
@@ -536,6 +553,7 @@
       const cutoff = performance.now() - SAMPLE_DURATION_MS;
       state.recent = state.recent.filter((item) => item.t >= cutoff);
       renderLive();
+      maybeAutoAddPoint();
     }
 
     async function requestSensors() {
@@ -557,7 +575,7 @@
         }
 
         window.addEventListener("devicemotion", onMotion, { passive: true });
-        setStatus("センサー待機中です。端末を静止させてください。");
+        setStatus("スマホを水平な場所に置き、画面を上へ向けて「画面上向きを記録」を押してください。");
       } catch (err) {
         setStatus(`センサー許可に失敗しました: ${err.message}`, "danger");
       }
@@ -607,10 +625,34 @@
       return Math.sqrt(mean(values.map((n) => (n - m) ** 2)));
     }
 
+    function vectorAngleDeg(a, b) {
+      const cos = Math.max(-1, Math.min(1, dot(normalize(a), normalize(b))));
+      return Math.acos(cos) * 180 / Math.PI;
+    }
+
+    function recordScreenUp() {
+      const summary = summarizeSamples(state.recent);
+      if (!summary.ok) {
+        setStatus(`画面上向きを記録できません: ${summary.reason}`, "warn");
+        return;
+      }
+
+      // 画面を上へ向けたとき、画面側は物理的な上方向です。
+      // accelerationIncludingGravity は重力方向として入るため、既存の上下定義に合わせて反転します。
+      state.screenOutNormal = nearestSignedAxis(scale(summary.normalized, -1));
+      state.result = null;
+      setStatus("画面上向きを記録しました。次に画面をホイール外側へ向けて立て、直進基準を記録してください。");
+      render();
+    }
+
     function recordBaseline() {
       const summary = summarizeSamples(state.recent);
       if (!summary.ok) {
         setStatus(`直進基準を記録できません: ${summary.reason}`, "warn");
+        return;
+      }
+      if (!state.screenOutNormal) {
+        setStatus("先にスマホを水平に置き、画面上向きを記録してください。", "warn");
         return;
       }
 
@@ -619,7 +661,9 @@
         pointType: "直進基準",
         timestamp: new Date().toISOString()
       };
-      setStatus("直進基準を記録しました。各ステア位置で測定点を追加してください。");
+      state.autoAddEnabled = true;
+      state.lastAutoAddAt = performance.now();
+      setStatus("直進基準を記録しました。静止したタイミングで測定点を自動追加します。");
       render();
     }
 
@@ -630,15 +674,46 @@
         return;
       }
 
+      addPointFromSummary(summary, els.pointType.value);
+      setStatus(`測定点 ${state.points.length} を追加しました。`);
+      render();
+    }
+
+    function addPointFromSummary(summary, pointType) {
       state.points.push({
         ...summary,
-        pointType: els.pointType.value,
+        pointType,
         timestamp: new Date().toISOString(),
         usedForFit: true,
         excludedReason: ""
       });
       state.result = null;
-      setStatus(`測定点 ${state.points.length} を追加しました。`);
+    }
+
+    function maybeAutoAddPoint() {
+      if (!state.autoAddEnabled || !state.baseline || state.recent.length < MIN_SAMPLE_COUNT) {
+        return;
+      }
+
+      const now = performance.now();
+      if (now - state.lastAutoAddAt < AUTO_ADD_COOLDOWN_MS) {
+        return;
+      }
+
+      const summary = summarizeSamples(state.recent);
+      if (!summary.ok) {
+        return;
+      }
+
+      const lastPoint = state.points[state.points.length - 1] || state.baseline;
+      const angleDeg = vectorAngleDeg(lastPoint.normalized, summary.normalized);
+      if (angleDeg < AUTO_ADD_MIN_ANGLE_DEG) {
+        return;
+      }
+
+      addPointFromSummary(summary, `自動${state.points.length + 1}`);
+      state.lastAutoAddAt = now;
+      setStatus(`静止を検出して測定点 ${state.points.length} を自動追加しました。`);
       render();
     }
 
@@ -819,10 +894,23 @@
       renderLive();
       renderResult();
       renderTable();
+      renderMountStatus();
       els.debugBtn.hidden = !state.debug;
       els.fitBtn.disabled = state.points.filter((point) => point.usedForFit).length < MIN_FIT_POINTS;
       els.csvBtn.disabled = state.points.length === 0;
       els.removeBtn.disabled = state.points.length === 0;
+    }
+
+    function renderMountStatus() {
+      if (!state.screenOutNormal) {
+        els.mountStatus.textContent = "1. スマホを水平に置き、画面を上へ向けて記録";
+        return;
+      }
+      if (!state.baseline) {
+        els.mountStatus.textContent = "2. 画面を外側へ向けて立て、直進基準を記録";
+        return;
+      }
+      els.mountStatus.textContent = "準備完了。揺れが収まると測定点を自動追加";
     }
 
     function renderResult() {
@@ -878,6 +966,7 @@
     function removeLastPoint() {
       state.points.pop();
       state.result = null;
+      state.lastAutoAddAt = performance.now();
       setStatus("最後の測定点を削除しました。");
       render();
     }
@@ -886,6 +975,9 @@
       state.points = [];
       state.baseline = null;
       state.result = null;
+      state.autoAddEnabled = false;
+      state.lastAutoAddAt = 0;
+      state.screenOutNormal = null;
       setStatus("全測定点をクリアしました。");
       render();
     }
@@ -982,6 +1074,7 @@
     }
 
     function addDebugData() {
+      state.screenOutNormal = v(0, 0, 1);
       state.baseline = makePoint(v(0, 0, 9.81), "直進基準");
       state.points = [];
 
@@ -1022,6 +1115,7 @@
     }
 
     els.permissionBtn.addEventListener("click", requestSensors);
+    els.screenUpBtn.addEventListener("click", recordScreenUp);
     els.baselineBtn.addEventListener("click", recordBaseline);
     els.sampleBtn.addEventListener("click", addPoint);
     els.fitBtn.addEventListener("click", fitCaster);
@@ -1029,7 +1123,7 @@
     els.clearBtn.addEventListener("click", clearPoints);
     els.csvBtn.addEventListener("click", exportCsv);
     els.debugBtn.addEventListener("click", addDebugData);
-    [els.normalSelect, els.sideSelect, els.reverseForward].forEach((el) => {
+    [els.sideSelect, els.reverseForward].forEach((el) => {
       el.addEventListener("change", () => {
         state.result = null;
         render();
