@@ -793,8 +793,8 @@
         return;
       }
 
-      addPointFromSummary(summary, `手動${state.points.length + 1}`);
-      setStatus(`測定点 ${state.points.length} を追加しました。`);
+      const fitted = addPointFromSummary(summary, `手動${state.points.length + 1}`);
+      setStatus(fitted ? `測定点 ${state.points.length} を追加し、推定結果を更新しました。` : `測定点 ${state.points.length} を追加しました。`);
       render();
     }
 
@@ -808,6 +808,7 @@
       });
       state.result = null;
       playCaptureSound();
+      return updateFitIfReady();
     }
 
     function maybeAutoAddPoint() {
@@ -831,9 +832,9 @@
         return;
       }
 
-      addPointFromSummary(summary, `自動${state.points.length + 1}`);
+      const fitted = addPointFromSummary(summary, `自動${state.points.length + 1}`);
       state.lastAutoAddAt = now;
-      setStatus(`静止を検出して測定点 ${state.points.length} を自動追加しました。`);
+      setStatus(fitted ? `静止を検出して測定点 ${state.points.length} を自動追加し、推定結果を更新しました。` : `静止を検出して測定点 ${state.points.length} を自動追加しました。`);
       render();
     }
 
@@ -848,6 +849,26 @@
         return;
       }
 
+      state.result = calculateCasterResult(usable);
+
+      if (state.result.quality !== "良好") {
+        setStatus("推定は完了しましたが、点の広がりまたは残差に注意してください。", "warn");
+      } else {
+        setStatus("ステア軸を推定しました。");
+      }
+      render();
+    }
+
+    function updateFitIfReady() {
+      const usable = state.points.filter((point) => point.usedForFit);
+      if (!state.baseline || usable.length < MIN_FIT_POINTS) {
+        return false;
+      }
+      state.result = calculateCasterResult(usable);
+      return true;
+    }
+
+    function calculateCasterResult(usable) {
       const vectors = usable.map((point) => point.normalized);
       const fit = fitPlane(vectors);
       let axis = fit.axis;
@@ -866,7 +887,7 @@
       const spreadRatio = fit.eigenvalues[2] / Math.max(fit.eigenvalues[1], 1e-9);
       const quality = judgeQuality(rmsResidual, usable.length, spreadRatio);
 
-      state.result = {
+      return {
         casterDeg,
         saiDeg,
         axis,
@@ -881,13 +902,6 @@
         spreadRatio,
         pointCount: usable.length
       };
-
-      if (quality !== "良好") {
-        setStatus("推定は完了しましたが、点の広がりまたは残差に注意してください。", "warn");
-      } else {
-        setStatus("ステア軸を推定しました。");
-      }
-      render();
     }
 
     function fitPlane(points) {
