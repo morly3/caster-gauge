@@ -1,580 +1,1042 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Caster Angle Gauge</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap');
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Caster Gauge</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --panel: #141b23;
+      --panel-2: #10161d;
+      --border: #273340;
+      --text: #edf3f7;
+      --muted: #93a2ad;
+      --accent: #28d6a2;
+      --accent-2: #64a8ff;
+      --warn: #ffb454;
+      --danger: #ff6b6b;
+      --good: #7bd88f;
+    }
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
-  :root {
-    --bg: #0a0e17;
-    --surface: #131a2b;
-    --border: #1e2a42;
-    --text: #e0e6f0;
-    --text-dim: #6b7a94;
-    --accent: #00d4aa;
-    --accent-dim: rgba(0, 212, 170, 0.15);
-    --warn: #ff6b6b;
-    --blue: #4ea8de;
-  }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+      -webkit-user-select: none;
+      user-select: none;
+    }
 
-  body {
-    font-family: 'Noto Sans JP', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    min-height: 100dvh;
-    overflow-x: hidden;
-    -webkit-user-select: none;
-    user-select: none;
-  }
+    header {
+      padding: 18px 16px 12px;
+      border-bottom: 1px solid var(--border);
+      background: #0e141b;
+      position: sticky;
+      top: 0;
+      z-index: 4;
+    }
 
-  .header {
-    padding: 16px 20px 8px;
-    text-align: center;
-    border-bottom: 1px solid var(--border);
-  }
-  .header h1 {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 18px;
-    font-weight: 700;
-    letter-spacing: 2px;
-    color: var(--accent);
-  }
-  .header .sub {
-    font-size: 11px;
-    color: var(--text-dim);
-    margin-top: 2px;
-  }
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: 0;
+    }
 
-  .main-display {
-    padding: 16px 20px;
-  }
+    .sub {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
 
-  .angle-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 10px;
-    margin-bottom: 16px;
-  }
+    main {
+      width: min(980px, 100%);
+      margin: 0 auto;
+      padding: 16px;
+    }
 
-  .angle-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 12px 8px;
-    text-align: center;
-  }
-  .angle-card .label {
-    font-size: 10px;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    font-family: 'JetBrains Mono', monospace;
-  }
-  .angle-card .value {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 28px;
-    font-weight: 700;
-    margin: 4px 0;
-    min-height: 38px;
-    line-height: 38px;
-  }
-  .angle-card .unit {
-    font-size: 11px;
-    color: var(--text-dim);
-  }
-  .angle-card.yaw .value { color: var(--blue); }
-  .angle-card.pitch .value { color: var(--accent); }
-  .angle-card.roll .value { color: #c084fc; }
+    section {
+      margin-bottom: 16px;
+    }
 
-  .result-card {
-    background: linear-gradient(135deg, rgba(0,212,170,0.08), rgba(78,168,222,0.08));
-    border: 1px solid var(--accent);
-    border-radius: 12px;
-    padding: 16px;
-    text-align: center;
-    margin-bottom: 16px;
-  }
-  .result-card .label {
-    font-size: 12px;
-    color: var(--accent);
-    font-family: 'JetBrains Mono', monospace;
-    letter-spacing: 1px;
-  }
-  .result-card .value {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 42px;
-    font-weight: 700;
-    color: var(--text);
-    margin: 4px 0;
-  }
-  .result-card .hint {
-    font-size: 11px;
-    color: var(--text-dim);
-  }
+    .grid {
+      display: grid;
+      gap: 10px;
+    }
 
-  .controls {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 0 20px;
-  }
+    .grid.cols-3 {
+      grid-template-columns: repeat(3, 1fr);
+    }
 
-  .btn-row {
-    display: flex;
-    gap: 10px;
-  }
+    .grid.cols-2 {
+      grid-template-columns: repeat(2, 1fr);
+    }
 
-  .btn {
-    flex: 1;
-    padding: 14px 12px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--surface);
-    color: var(--text);
-    font-family: 'Noto Sans JP', sans-serif;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.15s;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .btn:active {
-    transform: scale(0.97);
-  }
-  .btn.primary {
-    background: var(--accent);
-    color: var(--bg);
-    border-color: var(--accent);
-  }
-  .btn.primary:active {
-    background: #00b893;
-  }
-  .btn.danger {
-    border-color: var(--warn);
-    color: var(--warn);
-  }
-  .btn.recording {
-    background: var(--warn);
-    color: #fff;
-    border-color: var(--warn);
-    animation: pulse 1.2s ease-in-out infinite;
-  }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+    }
 
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
-  }
+    .metric {
+      min-height: 92px;
+    }
 
-  .log-section {
-    padding: 16px 20px;
-  }
-  .log-section h3 {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    color: var(--text-dim);
-    letter-spacing: 1px;
-    margin-bottom: 8px;
-  }
+    .label {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
 
-  .log-table-wrap {
-    overflow-x: auto;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    max-height: 200px;
-    overflow-y: auto;
-  }
+    .value {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 28px;
+      font-weight: 700;
+      margin-top: 6px;
+      overflow-wrap: anywhere;
+    }
 
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-  }
-  th {
-    background: var(--surface);
-    color: var(--text-dim);
-    padding: 8px 6px;
-    text-align: right;
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    border-bottom: 1px solid var(--border);
-  }
-  th:first-child { text-align: left; }
-  td {
-    padding: 6px;
-    text-align: right;
-    border-bottom: 1px solid var(--border);
-    color: var(--text);
-  }
-  td:first-child { text-align: left; color: var(--text-dim); }
+    .result {
+      border-color: rgba(40, 214, 162, 0.7);
+      background: #11211f;
+    }
 
-  .status-bar {
-    padding: 10px 20px;
-    font-size: 11px;
-    color: var(--text-dim);
-    text-align: center;
-    font-family: 'JetBrains Mono', monospace;
-  }
-  .status-bar.error { color: var(--warn); }
+    .result .value {
+      font-size: 44px;
+      color: var(--accent);
+    }
 
-  .overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.8);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-  }
-  .overlay-content {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 32px 24px;
-    text-align: center;
-    max-width: 320px;
-    width: 90%;
-  }
-  .overlay-content h2 {
-    font-size: 18px;
-    margin-bottom: 12px;
-    color: var(--accent);
-  }
-  .overlay-content p {
-    font-size: 13px;
-    color: var(--text-dim);
-    margin-bottom: 20px;
-    line-height: 1.6;
-  }
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
 
-  .hidden { display: none !important; }
+    button,
+    select,
+    input[type="checkbox"] {
+      font: inherit;
+    }
 
-  .steer-info {
-    font-size: 11px;
-    color: var(--text-dim);
-    text-align: center;
-    padding: 8px 20px 0;
-    font-family: 'JetBrains Mono', monospace;
-  }
-</style>
+    button,
+    select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      min-height: 44px;
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 10px 12px;
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #06110e;
+    }
+
+    button.danger {
+      color: var(--danger);
+      border-color: rgba(255, 107, 107, 0.55);
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .settings {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 44px;
+      color: var(--text);
+    }
+
+    .status {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      min-height: 20px;
+    }
+
+    .status.warn {
+      color: var(--warn);
+    }
+
+    .status.danger {
+      color: var(--danger);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th,
+    td {
+      padding: 8px 7px;
+      border-bottom: 1px solid var(--border);
+      text-align: right;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: nowrap;
+    }
+
+    th:first-child,
+    td:first-child,
+    th:nth-child(2),
+    td:nth-child(2) {
+      text-align: left;
+    }
+
+    th {
+      color: var(--muted);
+      background: var(--panel-2);
+      position: sticky;
+      top: 0;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      max-height: 280px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .good {
+      color: var(--good);
+    }
+
+    .bad {
+      color: var(--danger);
+    }
+
+    @media (max-width: 740px) {
+      main {
+        padding: 12px;
+      }
+
+      .grid.cols-3,
+      .grid.cols-2,
+      .toolbar,
+      .settings {
+        grid-template-columns: 1fr;
+      }
+
+      .result .value {
+        font-size: 38px;
+      }
+    }
+  </style>
 </head>
 <body>
+  <header>
+    <h1>Caster Gauge</h1>
+    <div class="sub">重力ベクトルの平面フィットでステアリング軸を推定</div>
+  </header>
 
-<!-- Permission overlay for iOS -->
-<div id="permOverlay" class="overlay hidden">
-  <div class="overlay-content">
-    <h2>センサー許可</h2>
-    <p>ジャイロ・加速度センサーへのアクセスを許可してください。</p>
-    <button class="btn primary" onclick="requestPermission()" style="width:100%">許可する</button>
-  </div>
-</div>
+  <main>
+    <section class="grid cols-3">
+      <div class="panel metric">
+        <div class="label">gx</div>
+        <div class="value" id="gx">--</div>
+      </div>
+      <div class="panel metric">
+        <div class="label">gy</div>
+        <div class="value" id="gy">--</div>
+      </div>
+      <div class="panel metric">
+        <div class="label">gz</div>
+        <div class="value" id="gz">--</div>
+      </div>
+    </section>
 
-<div class="header">
-  <h1>CASTER GAUGE</h1>
-  <div class="sub">DeviceOrientation キャスター角測定</div>
-</div>
+    <section class="grid cols-3">
+      <div class="panel metric">
+        <div class="label">重力ベクトル長</div>
+        <div class="value" id="gmag">--</div>
+      </div>
+      <div class="panel metric">
+        <div class="label">センサー状態</div>
+        <div class="value" id="sensorState">待機</div>
+      </div>
+      <div class="panel metric">
+        <div class="label">静止判定</div>
+        <div class="value" id="stillState">--</div>
+      </div>
+    </section>
 
-<div class="main-display">
-  <div class="angle-grid">
-    <div class="angle-card yaw">
-      <div class="label">転舵角 (Yaw)</div>
-      <div class="value" id="yawVal">--</div>
-      <div class="unit">deg</div>
-    </div>
-    <div class="angle-card pitch">
-      <div class="label">前後傾斜 (Pitch)</div>
-      <div class="value" id="pitchVal">--</div>
-      <div class="unit">deg</div>
-    </div>
-    <div class="angle-card roll">
-      <div class="label">左右傾斜 (Roll)</div>
-      <div class="value" id="rollVal">--</div>
-      <div class="unit">deg</div>
-    </div>
-  </div>
+    <section class="panel result">
+      <div class="label">キャスター角</div>
+      <div class="value" id="caster">--</div>
+      <div class="status" id="signHint">正値: ステア軸上端が車両後方へ傾く設定</div>
+    </section>
 
-  <div class="result-card">
-    <div class="label">CASTER ANGLE (推定)</div>
-    <div class="value" id="casterVal">--</div>
-    <div class="hint" id="casterHint">記録データから算出されます</div>
-  </div>
-</div>
+    <section class="grid cols-3">
+      <div class="panel metric">
+        <div class="label">ステア軸 左右傾斜</div>
+        <div class="value" id="sai">--</div>
+      </div>
+      <div class="panel metric">
+        <div class="label">RMS 残差</div>
+        <div class="value" id="rms">--</div>
+      </div>
+      <div class="panel metric">
+        <div class="label">測定品質</div>
+        <div class="value" id="quality">--</div>
+      </div>
+    </section>
 
-<div class="controls">
-  <div class="btn-row">
-    <button class="btn primary" id="btnZero" onclick="setZero()">ゼロリセット</button>
-    <button class="btn" id="btnRec" onclick="toggleRecord()">● 記録開始</button>
-  </div>
-  <div class="btn-row">
-    <button class="btn" onclick="calcCaster()">キャスター算出</button>
-    <button class="btn" onclick="downloadCSV()">CSV保存</button>
-  </div>
-  <div class="btn-row">
-    <button class="btn danger" onclick="clearLog()">記録クリア</button>
-  </div>
-</div>
+    <section class="panel">
+      <div class="settings">
+        <label class="field">
+          <span class="label">ホイール面法線</span>
+          <select id="normalSelect">
+            <option value="x+">+X</option>
+            <option value="x-">-X</option>
+            <option value="y+">+Y</option>
+            <option value="y-">-Y</option>
+            <option value="z+">+Z</option>
+            <option value="z-" selected>-Z</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="label">測定対象</span>
+          <select id="sideSelect">
+            <option value="left">左前輪</option>
+            <option value="right">右前輪</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="label">点種別</span>
+          <select id="pointType">
+            <option>左大</option>
+            <option>左中</option>
+            <option>左小</option>
+            <option selected>直進</option>
+            <option>右小</option>
+            <option>右中</option>
+            <option>右大</option>
+            <option>測定点</option>
+          </select>
+        </label>
+        <label class="check">
+          <input id="reverseForward" type="checkbox">
+          車両前方向を反転
+        </label>
+      </div>
+    </section>
 
-<div class="steer-info" id="steerInfo">
-  ゲージをハブに固定 → ゼロリセット → 記録開始 → ステアリングを左右に切る → 記録停止 → 算出
-</div>
+    <section class="toolbar">
+      <button id="permissionBtn" class="primary">センサー許可</button>
+      <button id="baselineBtn">直進基準を記録</button>
+      <button id="sampleBtn">測定点を追加</button>
+      <button id="fitBtn">ステア軸を推定</button>
+      <button id="removeBtn">最後の点を削除</button>
+      <button id="clearBtn" class="danger">全点クリア</button>
+      <button id="csvBtn">CSV 保存</button>
+      <button id="debugBtn" hidden>模擬データ追加</button>
+    </section>
 
-<div class="log-section">
-  <h3>RECORDED DATA (<span id="logCount">0</span> pts)</h3>
-  <div class="log-table-wrap">
-    <table>
-      <thead>
-        <tr><th>t(s)</th><th>Yaw°</th><th>Pitch°</th><th>Roll°</th></tr>
-      </thead>
-      <tbody id="logBody"></tbody>
-    </table>
-  </div>
-</div>
+    <section>
+      <div class="status" id="status">センサー許可を押してください。iOS ではユーザー操作からの許可が必要です。</div>
+    </section>
 
-<div class="status-bar" id="statusBar">センサー待機中...</div>
+    <section>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>種別</th>
+              <th>gx</th>
+              <th>gy</th>
+              <th>gz</th>
+              <th>n</th>
+              <th>std</th>
+              <th>使用</th>
+            </tr>
+          </thead>
+          <tbody id="pointRows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
 
-<script>
-  // State
-  let rawAlpha = 0, rawBeta = 0, rawGamma = 0;
-  let offsetAlpha = 0, offsetBeta = 0, offsetGamma = 0;
-  let yaw = 0, pitch = 0, roll = 0;
-  let sensorReady = false;
+  <script>
+    const SAMPLE_DURATION_MS = 1200;
+    const MIN_SAMPLE_COUNT = 20;
+    const MAX_AXIS_STD = 0.08;
+    const MAX_MAG_STD = 0.12;
+    const MIN_FIT_POINTS = 5;
+    const GOOD_RMS_RESIDUAL = 0.035;
+    const WARN_RMS_RESIDUAL = 0.075;
+    const MIN_SPREAD_RATIO = 4;
 
-  let recording = false;
-  let logData = [];
-  let recStartTime = 0;
-  let recInterval = null;
+    const state = {
+      latestGravity: null,
+      recent: [],
+      points: [],
+      baseline: null,
+      result: null,
+      sensorReady: false,
+      debug: new URLSearchParams(location.search).get("debug") === "1"
+    };
 
-  // Smooth
-  const SMOOTH = 0.3;
-  let sYaw = 0, sPitch = 0, sRoll = 0;
+    const els = {
+      gx: document.getElementById("gx"),
+      gy: document.getElementById("gy"),
+      gz: document.getElementById("gz"),
+      gmag: document.getElementById("gmag"),
+      sensorState: document.getElementById("sensorState"),
+      stillState: document.getElementById("stillState"),
+      caster: document.getElementById("caster"),
+      sai: document.getElementById("sai"),
+      rms: document.getElementById("rms"),
+      quality: document.getElementById("quality"),
+      status: document.getElementById("status"),
+      pointRows: document.getElementById("pointRows"),
+      signHint: document.getElementById("signHint"),
+      normalSelect: document.getElementById("normalSelect"),
+      sideSelect: document.getElementById("sideSelect"),
+      pointType: document.getElementById("pointType"),
+      reverseForward: document.getElementById("reverseForward"),
+      permissionBtn: document.getElementById("permissionBtn"),
+      baselineBtn: document.getElementById("baselineBtn"),
+      sampleBtn: document.getElementById("sampleBtn"),
+      fitBtn: document.getElementById("fitBtn"),
+      removeBtn: document.getElementById("removeBtn"),
+      clearBtn: document.getElementById("clearBtn"),
+      csvBtn: document.getElementById("csvBtn"),
+      debugBtn: document.getElementById("debugBtn")
+    };
 
-  // iOS permission
-  function needsPermission() {
-    return typeof DeviceOrientationEvent !== 'undefined'
-      && typeof DeviceOrientationEvent.requestPermission === 'function';
-  }
+    function v(x, y, z) {
+      return [x, y, z];
+    }
 
-  function requestPermission() {
-    DeviceOrientationEvent.requestPermission().then(state => {
-      if (state === 'granted') {
-        document.getElementById('permOverlay').classList.add('hidden');
-        startListening();
+    function add(a, b) {
+      return v(a[0] + b[0], a[1] + b[1], a[2] + b[2]);
+    }
+
+    function sub(a, b) {
+      return v(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    }
+
+    function scale(a, s) {
+      return v(a[0] * s, a[1] * s, a[2] * s);
+    }
+
+    function dot(a, b) {
+      return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    }
+
+    function cross(a, b) {
+      return v(
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0]
+      );
+    }
+
+    function mag(a) {
+      return Math.sqrt(dot(a, a));
+    }
+
+    function normalize(a) {
+      const m = mag(a);
+      return m > 1e-9 ? scale(a, 1 / m) : v(0, 0, 0);
+    }
+
+    function clampFinite(n, fallback = 0) {
+      return Number.isFinite(n) ? n : fallback;
+    }
+
+    function fmt(n, digits = 3) {
+      return Number.isFinite(n) ? n.toFixed(digits) : "--";
+    }
+
+    function fmtDeg(n) {
+      return Number.isFinite(n) ? `${n.toFixed(2)} deg` : "--";
+    }
+
+    function getAxisVector(name) {
+      const map = {
+        "x+": v(1, 0, 0),
+        "x-": v(-1, 0, 0),
+        "y+": v(0, 1, 0),
+        "y-": v(0, -1, 0),
+        "z+": v(0, 0, 1),
+        "z-": v(0, 0, -1)
+      };
+      return map[name] || map["z-"];
+    }
+
+    function getFrame() {
+      const verticalUp = state.baseline ? scale(state.baseline.normalized, -1) : v(0, 0, -1);
+      const wheelNormalPhone = getAxisVector(els.normalSelect.value);
+      const lateralRaw = sub(wheelNormalPhone, scale(verticalUp, dot(wheelNormalPhone, verticalUp)));
+      let lateral = normalize(lateralRaw);
+
+      if (mag(lateral) < 1e-6) {
+        lateral = normalize(cross(verticalUp, v(1, 0, 0)));
+        if (mag(lateral) < 1e-6) {
+          lateral = normalize(cross(verticalUp, v(0, 1, 0)));
+        }
+      }
+
+      if (els.sideSelect.value === "right") {
+        lateral = scale(lateral, -1);
+      }
+
+      let forward = normalize(cross(verticalUp, lateral));
+      if (els.reverseForward.checked) {
+        forward = scale(forward, -1);
+      }
+
+      return { verticalUp, wheelNormalPhone, lateral, forward };
+    }
+
+    function onMotion(event) {
+      const g = event.accelerationIncludingGravity;
+      if (!g) {
+        setStatus("accelerationIncludingGravity が取得できません。対応ブラウザで開いてください。", "danger");
+        return;
+      }
+
+      // DeviceMotion の軸は端末座標系です。端末やブラウザで符号の扱いが違う場合があるため、
+      // UI のホイール面法線、左右輪、前方向反転で車両座標との対応を調整します。
+      const sample = v(clampFinite(g.x), clampFinite(g.y), clampFinite(g.z));
+      state.latestGravity = sample;
+      state.sensorReady = true;
+      state.recent.push({ t: performance.now(), g: sample });
+      const cutoff = performance.now() - SAMPLE_DURATION_MS;
+      state.recent = state.recent.filter((item) => item.t >= cutoff);
+      renderLive();
+    }
+
+    async function requestSensors() {
+      try {
+        if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
+          const motion = await DeviceMotionEvent.requestPermission();
+          if (motion !== "granted") {
+            setStatus("DeviceMotion の許可が得られませんでした。", "danger");
+            return;
+          }
+        }
+
+        if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+          try {
+            await DeviceOrientationEvent.requestPermission();
+          } catch (_) {
+            // キャスター計算には DeviceOrientation を使わないため、失敗しても継続します。
+          }
+        }
+
+        window.addEventListener("devicemotion", onMotion, { passive: true });
+        setStatus("センサー待機中です。端末を静止させてください。");
+      } catch (err) {
+        setStatus(`センサー許可に失敗しました: ${err.message}`, "danger");
+      }
+    }
+
+    function summarizeSamples(samples) {
+      if (samples.length < MIN_SAMPLE_COUNT) {
+        return { ok: false, reason: `サンプル不足 (${samples.length}/${MIN_SAMPLE_COUNT})` };
+      }
+
+      const rawMean = scale(samples.reduce((acc, item) => add(acc, item.g), v(0, 0, 0)), 1 / samples.length);
+      const normalized = normalize(rawMean);
+      const mags = samples.map((item) => mag(item.g));
+      const axisStd = [0, 1, 2].map((axis) => std(samples.map((item) => item.g[axis])));
+      const magStd = std(mags);
+      const maxAxisStd = Math.max(...axisStd);
+
+      if (maxAxisStd > MAX_AXIS_STD || magStd > MAX_MAG_STD) {
+        return {
+          ok: false,
+          reason: "車体の揺れが収まってから再測定してください",
+          rawMean,
+          normalized,
+          sampleCount: samples.length,
+          axisStd,
+          magStd
+        };
+      }
+
+      return {
+        ok: true,
+        reason: "",
+        rawMean,
+        normalized,
+        sampleCount: samples.length,
+        axisStd,
+        magStd
+      };
+    }
+
+    function mean(values) {
+      return values.reduce((sum, n) => sum + n, 0) / Math.max(values.length, 1);
+    }
+
+    function std(values) {
+      const m = mean(values);
+      return Math.sqrt(mean(values.map((n) => (n - m) ** 2)));
+    }
+
+    function recordBaseline() {
+      const summary = summarizeSamples(state.recent);
+      if (!summary.ok) {
+        setStatus(`直進基準を記録できません: ${summary.reason}`, "warn");
+        return;
+      }
+
+      state.baseline = {
+        ...summary,
+        pointType: "直進基準",
+        timestamp: new Date().toISOString()
+      };
+      setStatus("直進基準を記録しました。各ステア位置で測定点を追加してください。");
+      render();
+    }
+
+    function addPoint() {
+      const summary = summarizeSamples(state.recent);
+      if (!summary.ok) {
+        setStatus(`測定点を追加できません: ${summary.reason}`, "warn");
+        return;
+      }
+
+      state.points.push({
+        ...summary,
+        pointType: els.pointType.value,
+        timestamp: new Date().toISOString(),
+        usedForFit: true,
+        excludedReason: ""
+      });
+      state.result = null;
+      setStatus(`測定点 ${state.points.length} を追加しました。`);
+      render();
+    }
+
+    function fitCaster() {
+      const usable = state.points.filter((point) => point.usedForFit);
+      if (!state.baseline) {
+        setStatus("先に直進基準を記録してください。", "warn");
+        return;
+      }
+      if (usable.length < MIN_FIT_POINTS) {
+        setStatus(`測定点が不足しています。最低 ${MIN_FIT_POINTS} 点、推奨 7 点以上です。`, "warn");
+        return;
+      }
+
+      const vectors = usable.map((point) => point.normalized);
+      const fit = fitPlane(vectors);
+      let axis = fit.axis;
+      const frame = getFrame();
+
+      if (dot(axis, frame.verticalUp) < 0) {
+        axis = scale(axis, -1);
+      }
+
+      const c = mean(vectors.map((g) => dot(axis, g)));
+      const residuals = vectors.map((g) => Math.abs(dot(axis, g) - c));
+      const rmsResidual = Math.sqrt(mean(residuals.map((r) => r * r)));
+      const maxResidual = Math.max(...residuals);
+      const casterDeg = Math.atan2(dot(axis, frame.forward), dot(axis, frame.verticalUp)) * 180 / Math.PI;
+      const saiDeg = Math.atan2(dot(axis, frame.lateral), dot(axis, frame.verticalUp)) * 180 / Math.PI;
+      const spreadRatio = fit.eigenvalues[2] / Math.max(fit.eigenvalues[1], 1e-9);
+      const quality = judgeQuality(rmsResidual, usable.length, spreadRatio);
+
+      state.result = {
+        casterDeg,
+        saiDeg,
+        axis,
+        c,
+        rmsResidual,
+        maxResidual,
+        eigenvalues: fit.eigenvalues,
+        verticalUp: frame.verticalUp,
+        lateral: frame.lateral,
+        forward: frame.forward,
+        quality,
+        spreadRatio,
+        pointCount: usable.length
+      };
+
+      if (quality !== "良好") {
+        setStatus("推定は完了しましたが、点の広がりまたは残差に注意してください。", "warn");
       } else {
-        setStatus('センサー許可が拒否されました', true);
+        setStatus("ステア軸を推定しました。");
       }
-    }).catch(e => {
-      setStatus('許可リクエストエラー: ' + e.message, true);
+      render();
+    }
+
+    function fitPlane(points) {
+      const center = scale(points.reduce((acc, p) => add(acc, p), v(0, 0, 0)), 1 / points.length);
+      const c = [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0]
+      ];
+
+      for (const p of points) {
+        const d = sub(p, center);
+        for (let r = 0; r < 3; r += 1) {
+          for (let col = 0; col < 3; col += 1) {
+            c[r][col] += d[r] * d[col];
+          }
+        }
+      }
+
+      const eig = jacobiEigenSymmetric3(c);
+      const order = [0, 1, 2].sort((a, b) => eig.values[a] - eig.values[b]);
+      const values = order.map((i) => Math.max(0, eig.values[i]));
+      const axis = normalize([0, 1, 2].map((i) => eig.vectors[i][order[0]]));
+      return { axis, eigenvalues: values, center };
+    }
+
+    function jacobiEigenSymmetric3(input) {
+      const a = input.map((row) => row.slice());
+      const vectors = [
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1]
+      ];
+
+      for (let iter = 0; iter < 40; iter += 1) {
+        let p = 0;
+        let q = 1;
+        let max = Math.abs(a[0][1]);
+        for (const pair of [[0, 2], [1, 2]]) {
+          const val = Math.abs(a[pair[0]][pair[1]]);
+          if (val > max) {
+            max = val;
+            p = pair[0];
+            q = pair[1];
+          }
+        }
+
+        if (max < 1e-12) {
+          break;
+        }
+
+        const tau = (a[q][q] - a[p][p]) / (2 * a[p][q]);
+        const t = Math.sign(tau || 1) / (Math.abs(tau) + Math.sqrt(1 + tau * tau));
+        const cos = 1 / Math.sqrt(1 + t * t);
+        const sin = t * cos;
+        const app = a[p][p];
+        const aqq = a[q][q];
+        const apq = a[p][q];
+
+        a[p][p] = app - t * apq;
+        a[q][q] = aqq + t * apq;
+        a[p][q] = 0;
+        a[q][p] = 0;
+
+        for (let k = 0; k < 3; k += 1) {
+          if (k !== p && k !== q) {
+            const akp = a[k][p];
+            const akq = a[k][q];
+            a[k][p] = cos * akp - sin * akq;
+            a[p][k] = a[k][p];
+            a[k][q] = sin * akp + cos * akq;
+            a[q][k] = a[k][q];
+          }
+        }
+
+        for (let k = 0; k < 3; k += 1) {
+          const vip = vectors[k][p];
+          const viq = vectors[k][q];
+          vectors[k][p] = cos * vip - sin * viq;
+          vectors[k][q] = sin * vip + cos * viq;
+        }
+      }
+
+      return {
+        values: [a[0][0], a[1][1], a[2][2]],
+        vectors
+      };
+    }
+
+    function judgeQuality(rmsResidual, pointCount, spreadRatio) {
+      if (pointCount < 7) {
+        return "点数不足";
+      }
+      if (spreadRatio < MIN_SPREAD_RATIO) {
+        return "転舵範囲不足";
+      }
+      if (rmsResidual <= GOOD_RMS_RESIDUAL) {
+        return "良好";
+      }
+      if (rmsResidual <= WARN_RMS_RESIDUAL) {
+        return "要確認";
+      }
+      return "揺れまたは固定不良";
+    }
+
+    function renderLive() {
+      const g = state.latestGravity;
+      if (!g) {
+        return;
+      }
+
+      els.gx.textContent = fmt(g[0]);
+      els.gy.textContent = fmt(g[1]);
+      els.gz.textContent = fmt(g[2]);
+      els.gmag.textContent = fmt(mag(g));
+      els.sensorState.textContent = "取得中";
+
+      const summary = summarizeSamples(state.recent);
+      els.stillState.textContent = summary.ok ? "静止" : "揺れ";
+      els.stillState.className = `value ${summary.ok ? "good" : "bad"}`;
+    }
+
+    function render() {
+      renderLive();
+      renderResult();
+      renderTable();
+      els.debugBtn.hidden = !state.debug;
+      els.fitBtn.disabled = state.points.filter((point) => point.usedForFit).length < MIN_FIT_POINTS;
+      els.csvBtn.disabled = state.points.length === 0;
+      els.removeBtn.disabled = state.points.length === 0;
+    }
+
+    function renderResult() {
+      const result = state.result;
+      els.caster.textContent = result ? fmtDeg(result.casterDeg) : "--";
+      els.sai.textContent = result ? fmtDeg(result.saiDeg) : "--";
+      els.rms.textContent = result ? fmt(result.rmsResidual, 4) : "--";
+      els.quality.textContent = result ? result.quality : "--";
+      els.quality.className = `value ${result && result.quality === "良好" ? "good" : ""}`;
+    }
+
+    function renderTable() {
+      const rows = [];
+      if (state.baseline) {
+        rows.push(pointRow(state.baseline, 0, true));
+      }
+      state.points.forEach((point, index) => rows.push(pointRow(point, index + 1, false)));
+      els.pointRows.innerHTML = rows.join("");
+    }
+
+    function pointRow(point, index, isBaseline) {
+      const maxStd = Math.max(...point.axisStd);
+      const used = isBaseline ? "基準" : point.usedForFit ? "yes" : "no";
+      return `
+        <tr>
+          <td>${index}</td>
+          <td>${escapeHtml(point.pointType)}</td>
+          <td>${fmt(point.normalized[0])}</td>
+          <td>${fmt(point.normalized[1])}</td>
+          <td>${fmt(point.normalized[2])}</td>
+          <td>${point.sampleCount}</td>
+          <td>${fmt(maxStd, 4)}</td>
+          <td>${used}</td>
+        </tr>
+      `;
+    }
+
+    function escapeHtml(text) {
+      return String(text).replace(/[&<>"']/g, (ch) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#039;"
+      }[ch]));
+    }
+
+    function setStatus(message, type = "") {
+      els.status.textContent = message;
+      els.status.className = `status ${type}`.trim();
+    }
+
+    function removeLastPoint() {
+      state.points.pop();
+      state.result = null;
+      setStatus("最後の測定点を削除しました。");
+      render();
+    }
+
+    function clearPoints() {
+      state.points = [];
+      state.baseline = null;
+      state.result = null;
+      setStatus("全測定点をクリアしました。");
+      render();
+    }
+
+    function exportCsv() {
+      const lines = [];
+      lines.push([
+        "point_index",
+        "point_type",
+        "timestamp",
+        "gx_raw_mean",
+        "gy_raw_mean",
+        "gz_raw_mean",
+        "gx_normalized",
+        "gy_normalized",
+        "gz_normalized",
+        "sample_count",
+        "std_x",
+        "std_y",
+        "std_z",
+        "std_magnitude",
+        "used_for_fit",
+        "excluded_reason"
+      ].join(","));
+
+      const allPoints = state.baseline ? [state.baseline, ...state.points] : state.points;
+      allPoints.forEach((point, index) => {
+        lines.push(csvRow([
+          index,
+          point.pointType,
+          point.timestamp,
+          ...point.rawMean,
+          ...point.normalized,
+          point.sampleCount,
+          ...point.axisStd,
+          point.magStd,
+          index === 0 && state.baseline ? "baseline" : point.usedForFit,
+          point.excludedReason || ""
+        ]));
+      });
+
+      if (state.result) {
+        lines.push("");
+        lines.push(csvRow([
+          "caster_deg",
+          "sai_deg",
+          "steering_axis_x",
+          "steering_axis_y",
+          "steering_axis_z",
+          "vertical_x",
+          "vertical_y",
+          "vertical_z",
+          "lateral_x",
+          "lateral_y",
+          "lateral_z",
+          "forward_x",
+          "forward_y",
+          "forward_z",
+          "rms_residual",
+          "max_residual",
+          "eigenvalue_0",
+          "eigenvalue_1",
+          "eigenvalue_2",
+          "quality"
+        ]));
+        lines.push(csvRow([
+          state.result.casterDeg,
+          state.result.saiDeg,
+          ...state.result.axis,
+          ...state.result.verticalUp,
+          ...state.result.lateral,
+          ...state.result.forward,
+          state.result.rmsResidual,
+          state.result.maxResidual,
+          ...state.result.eigenvalues,
+          state.result.quality
+        ]));
+      }
+
+      const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `caster-gauge-${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function csvRow(values) {
+      return values.map((value) => {
+        const text = Number.isFinite(value) ? String(value) : String(value ?? "");
+        return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+      }).join(",");
+    }
+
+    function addDebugData() {
+      state.baseline = makePoint(v(0, 0, 9.81), "直進基準");
+      state.points = [];
+
+      const frame = getFrame();
+      const caster = 5 * Math.PI / 180;
+      const sai = 2 * Math.PI / 180;
+      let axis = normalize(add(frame.verticalUp, add(scale(frame.forward, Math.tan(caster)), scale(frame.lateral, Math.tan(sai)))));
+      if (dot(axis, frame.verticalUp) < 0) {
+        axis = scale(axis, -1);
+      }
+
+      const start = normalize(sub(frame.verticalUp, scale(axis, dot(frame.verticalUp, axis))));
+      const second = normalize(cross(axis, start));
+      [-32, -20, -10, 0, 10, 20, 32].forEach((deg) => {
+        const rad = deg * Math.PI / 180;
+        const noise = () => (Math.random() - 0.5) * 0.004;
+        const g = normalize(add(add(scale(start, Math.cos(rad)), scale(second, Math.sin(rad))), v(noise(), noise(), noise())));
+        state.points.push(makePoint(scale(g, 9.81), deg < 0 ? "左" : deg > 0 ? "右" : "直進"));
+      });
+
+      state.result = null;
+      setStatus("模擬データを追加しました。ステア軸を推定してください。");
+      render();
+    }
+
+    function makePoint(raw, pointType) {
+      return {
+        rawMean: raw,
+        normalized: normalize(raw),
+        sampleCount: 60,
+        axisStd: [0.01, 0.01, 0.01],
+        magStd: 0.02,
+        timestamp: new Date().toISOString(),
+        pointType,
+        usedForFit: true,
+        excludedReason: ""
+      };
+    }
+
+    els.permissionBtn.addEventListener("click", requestSensors);
+    els.baselineBtn.addEventListener("click", recordBaseline);
+    els.sampleBtn.addEventListener("click", addPoint);
+    els.fitBtn.addEventListener("click", fitCaster);
+    els.removeBtn.addEventListener("click", removeLastPoint);
+    els.clearBtn.addEventListener("click", clearPoints);
+    els.csvBtn.addEventListener("click", exportCsv);
+    els.debugBtn.addEventListener("click", addDebugData);
+    [els.normalSelect, els.sideSelect, els.reverseForward].forEach((el) => {
+      el.addEventListener("change", () => {
+        state.result = null;
+        render();
+      });
     });
-  }
 
-  function startListening() {
-    window.addEventListener('deviceorientation', onOrientation, true);
-    setStatus('センサー接続中...');
-  }
-
-  // Normalize angle to -180..180
-  function normAngle(a) {
-    while (a > 180) a -= 360;
-    while (a < -180) a += 360;
-    return a;
-  }
-
-  function onOrientation(e) {
-    if (e.alpha === null) return;
-    if (!sensorReady) {
-      sensorReady = true;
-      setStatus('センサー稼働中');
-      // Auto zero on first reading
-      offsetAlpha = e.alpha;
-      offsetBeta = e.beta;
-      offsetGamma = e.gamma;
-    }
-
-    rawAlpha = e.alpha;
-    rawBeta = e.beta;
-    rawGamma = e.gamma;
-
-    let newYaw = normAngle(rawAlpha - offsetAlpha);
-    let newPitch = rawBeta - offsetBeta;
-    let newRoll = rawGamma - offsetGamma;
-
-    // EMA smoothing
-    sYaw = sYaw + SMOOTH * (newYaw - sYaw);
-    sPitch = sPitch + SMOOTH * (newPitch - sPitch);
-    sRoll = sRoll + SMOOTH * (newRoll - sRoll);
-
-    yaw = sYaw;
-    pitch = sPitch;
-    roll = sRoll;
-
-    updateDisplay();
-  }
-
-  function updateDisplay() {
-    document.getElementById('yawVal').textContent = yaw.toFixed(1);
-    document.getElementById('pitchVal').textContent = pitch.toFixed(1);
-    document.getElementById('rollVal').textContent = roll.toFixed(1);
-  }
-
-  function setZero() {
-    offsetAlpha = rawAlpha;
-    offsetBeta = rawBeta;
-    offsetGamma = rawGamma;
-    sYaw = 0; sPitch = 0; sRoll = 0;
-    yaw = 0; pitch = 0; roll = 0;
-    updateDisplay();
-    setStatus('ゼロリセット完了');
-  }
-
-  function toggleRecord() {
-    const btn = document.getElementById('btnRec');
-    if (!recording) {
-      recording = true;
-      logData = [];
-      recStartTime = Date.now();
-      btn.textContent = '■ 記録停止';
-      btn.classList.add('recording');
-      // Record at ~10Hz
-      recInterval = setInterval(() => {
-        const t = ((Date.now() - recStartTime) / 1000).toFixed(2);
-        logData.push({
-          t: parseFloat(t),
-          yaw: parseFloat(yaw.toFixed(2)),
-          pitch: parseFloat(pitch.toFixed(2)),
-          roll: parseFloat(roll.toFixed(2))
-        });
-        updateLogTable();
-      }, 100);
-      setStatus('記録中...');
-    } else {
-      recording = false;
-      clearInterval(recInterval);
-      btn.textContent = '● 記録開始';
-      btn.classList.remove('recording');
-      setStatus('記録停止 (' + logData.length + ' pts)');
-    }
-  }
-
-  function updateLogTable() {
-    const tbody = document.getElementById('logBody');
-    const count = document.getElementById('logCount');
-    count.textContent = logData.length;
-
-    // Show last 50 rows for performance
-    const show = logData.slice(-50);
-    tbody.innerHTML = show.map(d =>
-      `<tr><td>${d.t}</td><td>${d.yaw}</td><td>${d.pitch}</td><td>${d.roll}</td></tr>`
-    ).join('');
-
-    // Auto scroll
-    const wrap = tbody.closest('.log-table-wrap');
-    wrap.scrollTop = wrap.scrollHeight;
-  }
-
-  function calcCaster() {
-    if (logData.length < 10) {
-      setStatus('データが不足しています（ステアリングを切りながら記録してください）', true);
-      return;
-    }
-
-    // Find max left and max right steer points
-    let maxLeft = null, maxRight = null;
-
-    for (const d of logData) {
-      if (d.yaw > 5 && (!maxRight || d.yaw > maxRight.yaw)) maxRight = d;
-      if (d.yaw < -5 && (!maxLeft || d.yaw < maxLeft.yaw)) maxLeft = d;
-    }
-
-    if (!maxLeft || !maxRight) {
-      // Try opposite sign convention
-      for (const d of logData) {
-        if (d.yaw < -5 && (!maxRight || d.yaw < maxRight.yaw)) maxRight = d;
-        if (d.yaw > 5 && (!maxLeft || d.yaw > maxLeft.yaw)) maxLeft = d;
-      }
-    }
-
-    if (!maxLeft || !maxRight) {
-      setStatus('左右に十分な転舵データがありません（±5°以上必要）', true);
-      return;
-    }
-
-    const steerAngleL = Math.abs(maxLeft.yaw);
-    const steerAngleR = Math.abs(maxRight.yaw);
-    const camberL = maxLeft.roll;
-    const camberR = maxRight.roll;
-
-    // Caster = (camber_left - camber_right) / (2 * sin(avg_steer))
-    const avgSteer = (steerAngleL + steerAngleR) / 2;
-    const avgSteerRad = avgSteer * Math.PI / 180;
-    const casterRad = (camberL - camberR) / (2 * Math.sin(avgSteerRad));
-    const casterDeg = casterRad * 180 / Math.PI;
-
-    document.getElementById('casterVal').textContent = casterDeg.toFixed(1) + '°';
-    document.getElementById('casterHint').textContent =
-      `左${steerAngleL.toFixed(1)}° (roll=${camberL.toFixed(2)}) / 右${steerAngleR.toFixed(1)}° (roll=${camberR.toFixed(2)})`;
-
-    setStatus('キャスター角算出完了');
-  }
-
-  function downloadCSV() {
-    if (logData.length === 0) {
-      setStatus('記録データがありません', true);
-      return;
-    }
-
-    let csv = 'time_s,yaw_deg,pitch_deg,roll_deg\n';
-    for (const d of logData) {
-      csv += `${d.t},${d.yaw},${d.pitch},${d.roll}\n`;
-    }
-
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const now = new Date();
-    const ts = now.getFullYear()
-      + String(now.getMonth()+1).padStart(2,'0')
-      + String(now.getDate()).padStart(2,'0')
-      + '_'
-      + String(now.getHours()).padStart(2,'0')
-      + String(now.getMinutes()).padStart(2,'0');
-    a.download = `caster_log_${ts}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setStatus('CSV保存完了');
-  }
-
-  function clearLog() {
-    logData = [];
-    document.getElementById('logBody').innerHTML = '';
-    document.getElementById('logCount').textContent = '0';
-    document.getElementById('casterVal').textContent = '--';
-    document.getElementById('casterHint').textContent = '記録データから算出されます';
-    setStatus('記録クリア');
-  }
-
-  function setStatus(msg, isError) {
-    const el = document.getElementById('statusBar');
-    el.textContent = msg;
-    el.className = 'status-bar' + (isError ? ' error' : '');
-  }
-
-  // Init
-  window.addEventListener('DOMContentLoaded', () => {
-    if (needsPermission()) {
-      document.getElementById('permOverlay').classList.remove('hidden');
-    } else if ('DeviceOrientationEvent' in window) {
-      startListening();
-    } else {
-      setStatus('このブラウザはDeviceOrientationに対応していません', true);
-    }
-  });
-</script>
+    render();
+  </script>
 </body>
 </html>
