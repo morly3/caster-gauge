@@ -34,34 +34,31 @@
     }
 
     header {
-      padding: 18px 16px 12px;
+      padding: 8px 12px;
       border-bottom: 1px solid var(--border);
       background: #0e141b;
-      position: sticky;
-      top: 0;
-      z-index: 4;
     }
 
     h1 {
       margin: 0;
-      font-size: 20px;
+      font-size: 16px;
       letter-spacing: 0;
     }
 
     .sub {
-      margin-top: 4px;
+      margin-top: 2px;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 11px;
     }
 
     main {
       width: min(980px, 100%);
       margin: 0 auto;
-      padding: 16px;
+      padding: 8px;
     }
 
     section {
-      margin-bottom: 16px;
+      margin-bottom: 8px;
     }
 
     .grid {
@@ -81,24 +78,24 @@
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 14px;
+      padding: 8px;
     }
 
     .metric {
-      min-height: 92px;
+      min-height: 58px;
     }
 
     .label {
       color: var(--muted);
-      font-size: 12px;
+      font-size: 10px;
       line-height: 1.35;
     }
 
     .value {
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 28px;
+      font-size: 18px;
       font-weight: 700;
-      margin-top: 6px;
+      margin-top: 2px;
       overflow-wrap: anywhere;
     }
 
@@ -108,14 +105,14 @@
     }
 
     .result .value {
-      font-size: 44px;
+      font-size: 36px;
       color: var(--accent);
     }
 
     .toolbar {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
+      grid-template-columns: 1fr;
+      gap: 6px;
     }
 
     button,
@@ -129,10 +126,10 @@
       width: 100%;
       border: 1px solid var(--border);
       border-radius: 8px;
-      min-height: 44px;
+      min-height: 40px;
       background: var(--panel-2);
       color: var(--text);
-      padding: 10px 12px;
+      padding: 8px 10px;
     }
 
     button {
@@ -158,8 +155,8 @@
 
     .settings {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
     }
 
     .field {
@@ -171,15 +168,15 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      min-height: 44px;
+      min-height: 36px;
       color: var(--text);
     }
 
     .status {
       color: var(--muted);
-      font-size: 13px;
-      line-height: 1.5;
-      min-height: 20px;
+      font-size: 11px;
+      line-height: 1.35;
+      min-height: 16px;
     }
 
     .status.warn {
@@ -193,12 +190,12 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 12px;
+      font-size: 10px;
     }
 
     th,
     td {
-      padding: 8px 7px;
+      padding: 5px 4px;
       border-bottom: 1px solid var(--border);
       text-align: right;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -221,9 +218,36 @@
 
     .table-wrap {
       overflow: auto;
-      max-height: 280px;
+      max-height: 132px;
       border: 1px solid var(--border);
       border-radius: 8px;
+    }
+
+    .app-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 8px;
+      align-items: start;
+    }
+
+    .top-result {
+      margin-bottom: 8px;
+    }
+
+    .telemetry {
+      grid-template-columns: repeat(4, 1fr);
+    }
+
+    .secondary-results {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .settings .mount-field {
+      grid-column: 1 / -1;
+    }
+
+    .status-panel {
+      min-height: 42px;
     }
 
     .good {
@@ -235,19 +259,86 @@
     }
 
     @media (max-width: 740px) {
-      main {
-        padding: 12px;
+      body {
+        overflow: hidden;
       }
 
-      .grid.cols-3,
-      .grid.cols-2,
-      .toolbar,
-      .settings {
+      header {
+        padding: 6px 10px;
+      }
+
+      header .sub {
+        display: none;
+      }
+
+      main {
+        height: calc(100vh - 38px);
+        height: calc(100dvh - 38px);
+        overflow: hidden;
+        padding: 6px;
+      }
+
+      .app-grid {
         grid-template-columns: 1fr;
       }
 
+      .telemetry {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .secondary-results {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .settings {
+        grid-template-columns: 1fr 1fr;
+      }
+
       .result .value {
-        font-size: 38px;
+        font-size: 32px;
+      }
+
+      .result .status {
+        display: none;
+      }
+
+      .toolbar {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 5px;
+      }
+
+      .toolbar .primary-action {
+        grid-column: 1 / -1;
+      }
+
+      .table-wrap {
+        max-height: 92px;
+      }
+
+      .hide-mobile {
+        display: none;
+      }
+
+      button,
+      select {
+        min-height: 34px;
+        padding: 6px 8px;
+      }
+
+      .panel {
+        padding: 6px;
+      }
+
+      .metric {
+        min-height: 48px;
+      }
+
+      .value {
+        font-size: 15px;
+      }
+
+      section {
+        margin-bottom: 6px;
       }
     }
   </style>
@@ -259,128 +350,119 @@
   </header>
 
   <main>
-    <section class="grid cols-3">
-      <div class="panel metric">
-        <div class="label">gx</div>
-        <div class="value" id="gx">--</div>
-      </div>
-      <div class="panel metric">
-        <div class="label">gy</div>
-        <div class="value" id="gy">--</div>
-      </div>
-      <div class="panel metric">
-        <div class="label">gz</div>
-        <div class="value" id="gz">--</div>
-      </div>
-    </section>
-
-    <section class="grid cols-3">
-      <div class="panel metric">
-        <div class="label">重力ベクトル長</div>
-        <div class="value" id="gmag">--</div>
-      </div>
-      <div class="panel metric">
-        <div class="label">センサー状態</div>
-        <div class="value" id="sensorState">待機</div>
-      </div>
-      <div class="panel metric">
-        <div class="label">静止判定</div>
-        <div class="value" id="stillState">--</div>
-      </div>
-    </section>
-
-    <section class="panel result">
+    <section class="panel result top-result">
       <div class="label">キャスター角</div>
       <div class="value" id="caster">--</div>
       <div class="status" id="signHint">正値: ステア軸上端が車両後方へ傾く設定</div>
     </section>
 
-    <section class="grid cols-3">
-      <div class="panel metric">
-        <div class="label">ステア軸 左右傾斜</div>
-        <div class="value" id="sai">--</div>
-      </div>
-      <div class="panel metric">
-        <div class="label">RMS 残差</div>
-        <div class="value" id="rms">--</div>
-      </div>
-      <div class="panel metric">
-        <div class="label">測定品質</div>
-        <div class="value" id="quality">--</div>
-      </div>
-    </section>
+    <div class="app-grid">
+      <div>
+        <section class="toolbar">
+          <button id="permissionBtn" class="primary primary-action">1 センサー許可</button>
+          <button id="screenUpBtn" class="primary-action">2 画面上向きを記録</button>
+          <button id="baselineBtn" class="primary-action">3 直進基準を記録</button>
+          <button id="sampleBtn">手動で点追加</button>
+          <button id="fitBtn">推定</button>
+          <button id="csvBtn">CSV</button>
+          <button id="removeBtn">最後を削除</button>
+          <button id="clearBtn" class="danger">全クリア</button>
+          <button id="debugBtn" hidden>模擬データ</button>
+        </section>
 
-    <section class="panel">
-      <div class="settings">
-        <div class="field">
-          <span class="label">取付キャリブレーション</span>
-          <button id="screenUpBtn">画面上向きを記録</button>
-        </div>
-        <div class="field">
-          <span class="label">取付ルール</span>
-          <div class="status" id="mountStatus">画面をホイール外側へ向けて立てます</div>
-        </div>
-        <label class="field">
-          <span class="label">測定対象</span>
-          <select id="sideSelect">
-            <option value="left">左前輪</option>
-            <option value="right">右前輪</option>
-          </select>
-        </label>
-        <label class="field">
-          <span class="label">点種別</span>
-          <select id="pointType">
-            <option>左大</option>
-            <option>左中</option>
-            <option>左小</option>
-            <option selected>直進</option>
-            <option>右小</option>
-            <option>右中</option>
-            <option>右大</option>
-            <option>測定点</option>
-          </select>
-        </label>
-        <label class="check">
-          <input id="reverseForward" type="checkbox">
-          車両前方向を反転
-        </label>
+        <section class="panel">
+          <div class="settings">
+            <div class="field mount-field">
+              <span class="label">次の操作</span>
+              <div class="status" id="mountStatus">画面をホイール外側へ向けて立てます</div>
+            </div>
+            <label class="field">
+              <span class="label">測定対象</span>
+              <select id="sideSelect">
+                <option value="left">左前輪</option>
+                <option value="right">右前輪</option>
+              </select>
+            </label>
+            <label class="check">
+              <input id="reverseForward" type="checkbox">
+              前方向を反転
+            </label>
+          </div>
+        </section>
+
+        <section class="panel status-panel">
+          <div class="status" id="status">センサー許可を押してください。iOS ではユーザー操作からの許可が必要です。</div>
+        </section>
       </div>
-    </section>
 
-    <section class="toolbar">
-      <button id="permissionBtn" class="primary">センサー許可</button>
-      <button id="baselineBtn">直進基準を記録</button>
-      <button id="sampleBtn">手動で測定点追加</button>
-      <button id="fitBtn">ステア軸を推定</button>
-      <button id="removeBtn">最後の点を削除</button>
-      <button id="clearBtn" class="danger">全点クリア</button>
-      <button id="csvBtn">CSV 保存</button>
-      <button id="debugBtn" hidden>模擬データ追加</button>
-    </section>
+      <div>
+        <section class="grid secondary-results">
+          <div class="panel metric">
+            <div class="label">左右傾斜</div>
+            <div class="value" id="sai">--</div>
+          </div>
+          <div class="panel metric">
+            <div class="label">RMS</div>
+            <div class="value" id="rms">--</div>
+          </div>
+          <div class="panel metric">
+            <div class="label">品質</div>
+            <div class="value" id="quality">--</div>
+          </div>
+        </section>
 
-    <section>
-      <div class="status" id="status">センサー許可を押してください。iOS ではユーザー操作からの許可が必要です。</div>
-    </section>
+        <section class="grid telemetry">
+          <div class="panel metric">
+            <div class="label">静止</div>
+            <div class="value" id="stillState">--</div>
+          </div>
+          <div class="panel metric">
+            <div class="label">点数</div>
+            <div class="value" id="pointCount">0</div>
+          </div>
+          <div class="panel metric hide-mobile">
+            <div class="label">状態</div>
+            <div class="value" id="sensorState">待機</div>
+          </div>
+          <div class="panel metric hide-mobile">
+            <div class="label">G</div>
+            <div class="value" id="gmag">--</div>
+          </div>
+          <div class="panel metric hide-mobile">
+            <div class="label">gx</div>
+            <div class="value" id="gx">--</div>
+          </div>
+          <div class="panel metric hide-mobile">
+            <div class="label">gy</div>
+            <div class="value" id="gy">--</div>
+          </div>
+          <div class="panel metric hide-mobile">
+            <div class="label">gz</div>
+            <div class="value" id="gz">--</div>
+          </div>
+        </section>
 
-    <section>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>種別</th>
-              <th>gx</th>
-              <th>gy</th>
-              <th>gz</th>
-              <th>n</th>
-              <th>std</th>
-              <th>使用</th>
-            </tr>
-          </thead>
-          <tbody id="pointRows"></tbody>
-        </table>
+        <section>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>種別</th>
+                  <th>gx</th>
+                  <th>gy</th>
+                  <th>gz</th>
+                  <th>n</th>
+                  <th>std</th>
+                  <th>使用</th>
+                </tr>
+              </thead>
+              <tbody id="pointRows"></tbody>
+            </table>
+          </div>
+        </section>
       </div>
-    </section>
+    </div>
   </main>
 
   <script>
@@ -405,6 +487,7 @@
       autoAddEnabled: false,
       lastAutoAddAt: 0,
       screenOutNormal: null,
+      audioContext: null,
       debug: new URLSearchParams(location.search).get("debug") === "1"
     };
 
@@ -419,12 +502,12 @@
       sai: document.getElementById("sai"),
       rms: document.getElementById("rms"),
       quality: document.getElementById("quality"),
+      pointCount: document.getElementById("pointCount"),
       status: document.getElementById("status"),
       pointRows: document.getElementById("pointRows"),
       signHint: document.getElementById("signHint"),
       mountStatus: document.getElementById("mountStatus"),
       sideSelect: document.getElementById("sideSelect"),
-      pointType: document.getElementById("pointType"),
       reverseForward: document.getElementById("reverseForward"),
       permissionBtn: document.getElementById("permissionBtn"),
       screenUpBtn: document.getElementById("screenUpBtn"),
@@ -484,6 +567,41 @@
 
     function fmtDeg(n) {
       return Number.isFinite(n) ? `${n.toFixed(2)} deg` : "--";
+    }
+
+    function ensureAudio() {
+      const AudioCtor = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtor) {
+        return null;
+      }
+      if (!state.audioContext) {
+        state.audioContext = new AudioCtor();
+      }
+      if (state.audioContext.state === "suspended") {
+        state.audioContext.resume().catch(() => {});
+      }
+      return state.audioContext;
+    }
+
+    function playCaptureSound() {
+      const audio = ensureAudio();
+      if (!audio) {
+        return;
+      }
+
+      const now = audio.currentTime;
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(1320, now + 0.08);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.12, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+      osc.connect(gain);
+      gain.connect(audio.destination);
+      osc.start(now);
+      osc.stop(now + 0.14);
     }
 
     function getAxisVector(name) {
@@ -557,6 +675,7 @@
     }
 
     async function requestSensors() {
+      ensureAudio();
       try {
         if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
           const motion = await DeviceMotionEvent.requestPermission();
@@ -674,7 +793,7 @@
         return;
       }
 
-      addPointFromSummary(summary, els.pointType.value);
+      addPointFromSummary(summary, `手動${state.points.length + 1}`);
       setStatus(`測定点 ${state.points.length} を追加しました。`);
       render();
     }
@@ -688,6 +807,7 @@
         excludedReason: ""
       });
       state.result = null;
+      playCaptureSound();
     }
 
     function maybeAutoAddPoint() {
@@ -895,6 +1015,7 @@
       renderResult();
       renderTable();
       renderMountStatus();
+      els.pointCount.textContent = String(state.points.length);
       els.debugBtn.hidden = !state.debug;
       els.fitBtn.disabled = state.points.filter((point) => point.usedForFit).length < MIN_FIT_POINTS;
       els.csvBtn.disabled = state.points.length === 0;
@@ -1114,6 +1235,9 @@
       };
     }
 
+    [els.permissionBtn, els.screenUpBtn, els.baselineBtn, els.sampleBtn, els.fitBtn, els.removeBtn, els.clearBtn, els.csvBtn, els.debugBtn].forEach((button) => {
+      button.addEventListener("click", ensureAudio);
+    });
     els.permissionBtn.addEventListener("click", requestSensors);
     els.screenUpBtn.addEventListener("click", recordScreenUp);
     els.baselineBtn.addEventListener("click", recordBaseline);
