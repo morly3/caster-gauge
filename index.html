@@ -363,7 +363,6 @@
           <button id="screenUpBtn" class="primary-action">2 画面上向きを記録</button>
           <button id="baselineBtn" class="primary-action">3 直進基準を記録</button>
           <button id="sampleBtn">手動で点追加</button>
-          <button id="fitBtn">推定</button>
           <button id="csvBtn">CSV</button>
           <button id="removeBtn">最後を削除</button>
           <button id="clearBtn" class="danger">全クリア</button>
@@ -513,7 +512,6 @@
       screenUpBtn: document.getElementById("screenUpBtn"),
       baselineBtn: document.getElementById("baselineBtn"),
       sampleBtn: document.getElementById("sampleBtn"),
-      fitBtn: document.getElementById("fitBtn"),
       removeBtn: document.getElementById("removeBtn"),
       clearBtn: document.getElementById("clearBtn"),
       csvBtn: document.getElementById("csvBtn"),
@@ -838,27 +836,6 @@
       render();
     }
 
-    function fitCaster() {
-      const usable = state.points.filter((point) => point.usedForFit);
-      if (!state.baseline) {
-        setStatus("先に直進基準を記録してください。", "warn");
-        return;
-      }
-      if (usable.length < MIN_FIT_POINTS) {
-        setStatus(`測定点が不足しています。最低 ${MIN_FIT_POINTS} 点、推奨 7 点以上です。`, "warn");
-        return;
-      }
-
-      state.result = calculateCasterResult(usable);
-
-      if (state.result.quality !== "良好") {
-        setStatus("推定は完了しましたが、点の広がりまたは残差に注意してください。", "warn");
-      } else {
-        setStatus("ステア軸を推定しました。");
-      }
-      render();
-    }
-
     function updateFitIfReady() {
       const usable = state.points.filter((point) => point.usedForFit);
       if (!state.baseline || usable.length < MIN_FIT_POINTS) {
@@ -1031,7 +1008,6 @@
       renderMountStatus();
       els.pointCount.textContent = String(state.points.length);
       els.debugBtn.hidden = !state.debug;
-      els.fitBtn.disabled = state.points.filter((point) => point.usedForFit).length < MIN_FIT_POINTS;
       els.csvBtn.disabled = state.points.length === 0;
       els.removeBtn.disabled = state.points.length === 0;
     }
@@ -1043,6 +1019,10 @@
       }
       if (!state.baseline) {
         els.mountStatus.textContent = "2. 画面を外側へ向けて立て、直進基準を記録";
+        return;
+      }
+      if (state.points.length < MIN_FIT_POINTS) {
+        els.mountStatus.textContent = `準備完了。あと ${MIN_FIT_POINTS - state.points.length} 点で自動推定`;
         return;
       }
       els.mountStatus.textContent = "準備完了。揺れが収まると測定点を自動追加";
@@ -1231,7 +1211,8 @@
       });
 
       state.result = null;
-      setStatus("模擬データを追加しました。ステア軸を推定してください。");
+      updateFitIfReady();
+      setStatus("模擬データを追加し、推定結果を更新しました。");
       render();
     }
 
@@ -1249,14 +1230,13 @@
       };
     }
 
-    [els.permissionBtn, els.screenUpBtn, els.baselineBtn, els.sampleBtn, els.fitBtn, els.removeBtn, els.clearBtn, els.csvBtn, els.debugBtn].forEach((button) => {
+    [els.permissionBtn, els.screenUpBtn, els.baselineBtn, els.sampleBtn, els.removeBtn, els.clearBtn, els.csvBtn, els.debugBtn].forEach((button) => {
       button.addEventListener("click", ensureAudio);
     });
     els.permissionBtn.addEventListener("click", requestSensors);
     els.screenUpBtn.addEventListener("click", recordScreenUp);
     els.baselineBtn.addEventListener("click", recordBaseline);
     els.sampleBtn.addEventListener("click", addPoint);
-    els.fitBtn.addEventListener("click", fitCaster);
     els.removeBtn.addEventListener("click", removeLastPoint);
     els.clearBtn.addEventListener("click", clearPoints);
     els.csvBtn.addEventListener("click", exportCsv);
