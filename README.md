@@ -2,7 +2,7 @@
 
 GitHub Pages: https://morly3.github.io/caster-gauge/
 
-Version: v0.4.3  
+Version: v0.4.4  
 Updated: 2026-07-17
 
 スマートフォンをホイール用アライメントゲージに固定し、重力ベクトルの静止サンプルからステアリング回転軸を推定してキャスター角を測る GitHub Pages 向けの単一 HTML アプリです。
