@@ -1,7 +1,7 @@
 # Measurement Algorithm
 
-- Version: v0.4.1
-- Updated: 2026-07-16
+- Version: v0.4.2
+- Updated: 2026-07-17
 
 ## Overview
 
@@ -40,6 +40,8 @@ The straight-ahead baseline records the gravity vector with the steering in the 
 - vehicle forward direction
 
 The straight-ahead baseline vector is not included in the current implementation's plane-fit measurement point set. Plane fitting uses only the measurement points stored in `state.points`.
+
+The baseline button arms baseline capture instead of sampling immediately. Once the recent sensor window passes the stillness test, the app records the straight-ahead baseline automatically. Immediately after that successful baseline capture, the app attempts to add the first measurement point from the same still window, then continues adding points periodically while the phone remains still.
 
 ## Measurement Points
 

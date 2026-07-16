@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Caster Gauge v0.4.1 - 2026-07-16</title>
+  <title>Caster Gauge v0.4.2 - 2026-07-17</title>
   <style>
     :root {
       --bg: #0b0f14;
@@ -345,8 +345,8 @@
 </head>
 <body>
   <header>
-    <h1>Caster Gauge v0.4.1</h1>
-    <div class="sub">更新日: 2026-07-16</div>
+    <h1>Caster Gauge v0.4.2</h1>
+    <div class="sub">更新日: 2026-07-17</div>
     <div class="sub">重力ベクトルの平面フィットでステアリング軸を推定</div>
   </header>
 
@@ -361,7 +361,7 @@
       <div>
         <section class="toolbar">
           <button id="permissionBtn" class="primary primary-action">1 センサー許可</button>
-          <button id="baselineBtn" class="primary-action">2 直進基準を記録</button>
+          <button id="baselineBtn" class="primary-action">2 直進基準を予約</button>
           <button id="sampleBtn">手動で点追加</button>
           <button id="csvBtn">CSV</button>
           <button id="removeBtn">最後を削除</button>
@@ -494,6 +494,7 @@
       result: null,
       sensorReady: false,
       autoAddEnabled: false,
+      baselinePending: false,
       lastAutoAddAt: 0,
       screenOutNormal: v(0, 0, 1),
       audioContext: null,
@@ -604,12 +605,12 @@
       osc.frequency.setValueAtTime(880, now);
       osc.frequency.exponentialRampToValueAtTime(1320, now + 0.08);
       gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.12, now + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.28, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
       osc.connect(gain);
       gain.connect(audio.destination);
       osc.start(now);
-      osc.stop(now + 0.14);
+      osc.stop(now + 0.18);
     }
 
     function getFrame() {
@@ -653,6 +654,7 @@
       const cutoff = performance.now() - SAMPLE_DURATION_MS;
       state.recent = state.recent.filter((item) => item.t >= cutoff);
       renderLive();
+      maybeRecordPendingBaseline();
       maybeAutoAddPoint();
     }
 
@@ -732,19 +734,35 @@
     }
 
     function recordBaseline() {
-      const summary = summarizeSamples(state.recent);
-      if (!summary.ok) {
-        setStatus(`直進基準を記録できません: ${summary.reason}`, "warn");
+      state.baselinePending = true;
+      state.autoAddEnabled = false;
+      setStatus("直進基準の記録待ちです。静止したタイミングで自動取得します。");
+      render();
+    }
+
+    function maybeRecordPendingBaseline() {
+      if (!state.baselinePending || state.recent.length < MIN_SAMPLE_COUNT) {
         return;
       }
+
+      const summary = summarizeSamples(state.recent);
+      if (!summary.ok) {
+        return;
+      }
+
       state.baseline = {
         ...summary,
         pointType: "直進基準",
         timestamp: new Date().toISOString()
       };
+      state.baselinePending = false;
       state.autoAddEnabled = true;
-      state.lastAutoAddAt = performance.now();
-      setStatus("直進基準を記録しました。静止したタイミングで測定点を自動追加します。");
+      state.points = [];
+      state.result = null;
+      state.lastAutoAddAt = 0;
+      playCaptureSound();
+      setStatus("静止を検出して直進基準を記録しました。続けて測定点を自動追加します。");
+      maybeAutoAddPoint(true);
       render();
     }
 
@@ -827,13 +845,13 @@
       return bestIndex;
     }
 
-    function maybeAutoAddPoint() {
+    function maybeAutoAddPoint(force = false) {
       if (!state.autoAddEnabled || !state.baseline || state.recent.length < MIN_SAMPLE_COUNT) {
         return;
       }
 
       const now = performance.now();
-      if (now - state.lastAutoAddAt < AUTO_ADD_COOLDOWN_MS) {
+      if (!force && now - state.lastAutoAddAt < AUTO_ADD_COOLDOWN_MS) {
         return;
       }
 
@@ -1170,6 +1188,10 @@
     }
 
     function renderMountStatus() {
+      if (state.baselinePending) {
+        els.mountStatus.textContent = "直進基準待ち。静止したら自動記録";
+        return;
+      }
       if (!state.baseline) {
         els.mountStatus.textContent = "1. 画面を外側へ向けて固定し、直進基準を記録";
         return;
@@ -1261,6 +1283,7 @@
       state.baseline = null;
       state.result = null;
       state.autoAddEnabled = false;
+      state.baselinePending = false;
       state.lastAutoAddAt = 0;
       state.screenOutNormal = v(0, 0, 1);
       setStatus("全測定点をクリアしました。");
