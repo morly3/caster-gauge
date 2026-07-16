@@ -1,0 +1,114 @@
+# Measurement Algorithm
+
+- Version: v0.2.0
+- Updated: 2026-07-16
+
+## Overview
+
+Caster Gauge estimates the steering axis from gravity vectors measured by a smartphone fixed to an alignment gauge. The app treats normalized gravity vectors captured at multiple stationary steering positions as a point cloud in 3D phone coordinates, fits those points to a plane, and uses the plane normal as the estimated steering-axis direction.
+
+The app then decomposes the estimated axis into vehicle vertical, lateral, and forward components to calculate caster angle and an SAI-like lateral inclination value.
+
+## Inputs
+
+The primary sensor input is:
+
+```js
+DeviceMotionEvent.accelerationIncludingGravity
+```
+
+For each stationary state, the app samples:
+
+```js
+event.accelerationIncludingGravity.x
+event.accelerationIncludingGravity.y
+event.accelerationIncludingGravity.z
+```
+
+The samples are averaged over a fixed duration, checked for stillness, and normalized into one gravity unit vector. That normalized vector is stored as one measurement point.
+
+The caster calculation does not use `DeviceOrientation` heading values, integrated gyro angles, steering angle, or camber angle as independent inputs.
+
+## Calibration
+
+The "screen facing up" calibration records which phone-axis direction corresponds to the outward-facing screen side. During measurement, the phone is assumed to be mounted upright with the screen facing outward from the wheel.
+
+The straight-ahead baseline records the gravity vector with the steering in the straight-ahead position. This baseline is used to construct vehicle reference directions in phone coordinates:
+
+- vertical up
+- vehicle lateral direction
+- vehicle forward direction
+
+The straight-ahead baseline vector is not included in the current implementation's plane-fit measurement point set. Plane fitting uses only the measurement points stored in `state.points`.
+
+## Measurement Points
+
+The wheel is moved through multiple steering positions. At each position, the vehicle and phone must be stationary before a gravity vector is accepted.
+
+Measurement points can be added manually or automatically. Automatic addition uses:
+
+- stillness over a sampling window
+- a minimum angular difference from the previous measurement point
+- a cooldown time after the last automatic point
+
+These checks reduce duplicate captures from nearly the same phone attitude.
+
+The steering angle in degrees is not acquired, calculated, or used as an input.
+
+## Plane Fit
+
+The app treats the normalized gravity vectors as points in 3D space.
+
+1. Compute the point-cloud mean.
+2. Subtract the mean from each point.
+3. Accumulate a 3x3 covariance matrix from those centered vectors.
+4. Perform eigendecomposition of the symmetric covariance matrix.
+5. Select the eigenvector corresponding to the smallest eigenvalue.
+
+That eigenvector is the normal of the least-squares plane fitted to the measured gravity-vector points. The app uses this plane normal as the estimated steering-axis direction.
+
+This implementation does not construct a virtual 3D coordinate point on the wheel axis for the straight-ahead position or for two steered positions. It also does not compute a plane through exactly three virtual points. It fits a plane statistically to five or more measured gravity vectors.
+
+## Caster And SAI-Like Values
+
+From the screen-up calibration and straight-ahead baseline, the app constructs vehicle reference directions in phone coordinates:
+
+- `verticalUp`
+- `lateral`
+- `forward`
+
+The estimated steering axis is projected onto those directions.
+
+Caster angle is calculated from the steering-axis vertical and forward components:
+
+```js
+casterRad = Math.atan2(
+  dot(axis, forward),
+  dot(axis, verticalUp)
+);
+```
+
+The SAI-like lateral inclination value is calculated from the steering-axis vertical and lateral components:
+
+```js
+saiRad = Math.atan2(
+  dot(axis, lateral),
+  dot(axis, verticalUp)
+);
+```
+
+Positive caster is displayed as the direction where the upper end of the steering axis leans toward the rear of the vehicle, according to the current vehicle-forward sign setting.
+
+## Not Used
+
+The current implementation does not use:
+
+- steering angle as an independent input
+- camber angle as an independent input or intermediate parameter
+- `DeviceOrientation` heading values for caster calculation
+- integrated gyro angle for caster calculation
+- virtual 3D points constructed on the wheel axis
+- a plane defined only by three virtual coordinate points
+
+Instead, the steering axis is estimated directly by least-squares plane fitting of multiple measured gravity vectors.
+

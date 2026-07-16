@@ -846,6 +846,21 @@
       return true;
     }
 
+    /*
+     * Steering-axis estimation
+     *
+     * This implementation uses normalized gravity vectors captured from
+     * DeviceMotionEvent.accelerationIncludingGravity at multiple stationary
+     * steering positions. It does not use DeviceOrientation heading values,
+     * integrated gyro angles, steering angle, or camber angle as independent
+     * inputs. It also does not construct three virtual points on the wheel
+     * axis.
+     *
+     * The recorded straight-ahead baseline defines vehicle vertical in the
+     * phone coordinate system and is used to decompose the estimated axis into
+     * vertical, lateral, and forward components. The baseline sample itself is
+     * not included in the plane-fit point set below.
+     */
     function calculateCasterResult(usable) {
       const vectors = usable.map((point) => point.normalized);
       const fit = fitPlane(vectors);
@@ -882,6 +897,15 @@
       };
     }
 
+    /*
+     * Least-squares plane fit for measured gravity-vector points.
+     *
+     * The point cloud is centered, a 3x3 covariance matrix is accumulated from
+     * the centered vectors, and symmetric eigendecomposition is applied. The
+     * eigenvector corresponding to the smallest eigenvalue is the normal of the
+     * least-squares plane and is treated as the estimated steering-axis
+     * direction.
+     */
     function fitPlane(points) {
       const center = scale(points.reduce((acc, p) => add(acc, p), v(0, 0, 0)), 1 / points.length);
       const c = [
