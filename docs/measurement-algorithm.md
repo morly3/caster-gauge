@@ -1,6 +1,6 @@
 # Measurement Algorithm
 
-- Version: v0.4.2
+- Version: v0.4.3
 - Updated: 2026-07-17
 
 ## Overview
