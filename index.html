@@ -113,6 +113,11 @@
       display: grid;
       grid-template-columns: 1fr;
       gap: 6px;
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      background: var(--bg);
+      padding-bottom: 6px;
     }
 
     button,
@@ -259,10 +264,6 @@
     }
 
     @media (max-width: 740px) {
-      body {
-        overflow: hidden;
-      }
-
       header {
         padding: 6px 10px;
       }
@@ -272,9 +273,6 @@
       }
 
       main {
-        height: calc(100vh - 38px);
-        height: calc(100dvh - 38px);
-        overflow: hidden;
         padding: 6px;
       }
 
@@ -312,7 +310,7 @@
       }
 
       .table-wrap {
-        max-height: 92px;
+        max-height: 240px;
       }
 
       .hide-mobile {
@@ -351,6 +349,16 @@
   </header>
 
   <main>
+    <section class="toolbar">
+      <button id="permissionBtn" class="primary primary-action">1 センサー許可</button>
+      <button id="baselineBtn" class="primary-action">2 直進基準取得</button>
+      <button id="sampleBtn">手動で点追加</button>
+      <button id="csvBtn">CSV</button>
+      <button id="removeBtn">最後を削除</button>
+      <button id="clearBtn" class="danger">全クリア</button>
+      <button id="debugBtn" hidden>模擬データ</button>
+    </section>
+
     <section class="panel result top-result">
       <div class="label">キャスター角</div>
       <div class="value" id="caster">--</div>
@@ -359,16 +367,6 @@
 
     <div class="app-grid">
       <div>
-        <section class="toolbar">
-          <button id="permissionBtn" class="primary primary-action">1 センサー許可</button>
-          <button id="baselineBtn" class="primary-action">2 直進基準取得</button>
-          <button id="sampleBtn">手動で点追加</button>
-          <button id="csvBtn">CSV</button>
-          <button id="removeBtn">最後を削除</button>
-          <button id="clearBtn" class="danger">全クリア</button>
-          <button id="debugBtn" hidden>模擬データ</button>
-        </section>
-
         <section class="panel">
           <div class="settings">
             <div class="field mount-field">
@@ -480,7 +478,7 @@
     const MIN_FIT_POINTS = 5;
     const AUTO_ADD_COOLDOWN_MS = 1000;
     const AUTO_ADD_MIN_ANGLE_DEG = 0;
-    const MAX_MEASUREMENT_POINTS = 80;
+    const MAX_MEASUREMENT_POINTS = 40;
     const MAX_UNCERTAINTY_POINTS = 32;
     const MAX_RENDERED_POINT_ROWS = 40;
     const DENSITY_WEIGHT_BAND_DEG = 4;
@@ -608,11 +606,11 @@
       const now = audio.currentTime;
       const osc = audio.createOscillator();
       const gain = audio.createGain();
-      osc.type = "sine";
+      osc.type = "square";
       osc.frequency.setValueAtTime(880, now);
       osc.frequency.exponentialRampToValueAtTime(1320, now + 0.07);
       gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(1.0, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(1.6, now + 0.01);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
       osc.connect(gain);
       gain.connect(audio.destination);
