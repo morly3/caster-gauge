@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Caster Gauge v0.4.9 - 2026-07-17</title>
+  <title>Caster Gauge v5.0.0 - 2026-07-17</title>
   <style>
     :root {
       --bg: #0b0f14;
@@ -67,11 +67,11 @@
     }
 
     .grid.cols-3 {
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
     .grid.cols-2 {
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .panel {
@@ -230,9 +230,15 @@
 
     .app-grid {
       display: grid;
-      grid-template-columns: 1.1fr 0.9fr;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
       gap: 8px;
       align-items: start;
+    }
+
+    .app-grid > *,
+    .grid > *,
+    .toolbar > * {
+      min-width: 0;
     }
 
     .top-result {
@@ -240,11 +246,11 @@
     }
 
     .telemetry {
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
     .secondary-results {
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
     .settings .mount-field {
@@ -281,11 +287,11 @@
       }
 
       .telemetry {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
       .secondary-results {
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(4, minmax(0, 1fr));
       }
 
       .settings {
@@ -301,7 +307,7 @@
       }
 
       .toolbar {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 5px;
       }
 
@@ -343,7 +349,7 @@
 </head>
 <body>
   <header>
-    <h1>Caster Gauge v0.4.9</h1>
+    <h1>Caster Gauge v5.0.0</h1>
     <div class="sub">更新日: 2026-07-17</div>
     <div class="sub">重力ベクトルの平面フィットでステアリング軸を推定</div>
   </header>
@@ -352,7 +358,7 @@
     <section class="toolbar">
       <button id="permissionBtn" class="primary primary-action">1 センサー許可</button>
       <button id="baselineBtn" class="primary-action">2 直進基準取得</button>
-      <button id="sampleBtn">手動で点追加</button>
+      <button id="sampleBtn">手動で取得</button>
       <button id="csvBtn">CSV</button>
       <button id="removeBtn">最後を削除</button>
       <button id="clearBtn" class="danger">全クリア</button>
@@ -400,7 +406,7 @@
             <div class="value" id="quality">--</div>
           </div>
           <div class="panel metric">
-            <div class="label">σ / 95%幅</div>
+            <div class="label">SE / 95%幅</div>
             <div class="value" id="uncertainty">--</div>
           </div>
         </section>
@@ -411,7 +417,7 @@
             <div class="value" id="stillState">--</div>
           </div>
           <div class="panel metric">
-            <div class="label">点数</div>
+            <div class="label">位置 / 取得</div>
             <div class="value" id="pointCount">0</div>
           </div>
           <div class="panel metric hide-mobile">
@@ -442,6 +448,7 @@
               <thead>
                 <tr>
                   <th>#</th>
+                  <th>位置</th>
                   <th>種別</th>
                   <th>gx</th>
                   <th>gy</th>
@@ -464,18 +471,26 @@
     const MIN_SAMPLE_COUNT = 20;
     const MAX_AXIS_STD = 0.08;
     const MAX_MAG_STD = 0.12;
-    const MIN_FIT_POINTS = 5;
+    const MIN_FIT_SESSIONS = 5;
     const AUTO_ADD_COOLDOWN_MS = 1000;
     const AUTO_ADD_POINTS_PER_STILL_SESSION = 2;
     const MAX_MEASUREMENT_POINTS = 40;
-    const MAX_UNCERTAINTY_POINTS = 32;
+    const MAX_UNCERTAINTY_SESSIONS = 32;
     const MAX_RENDERED_POINT_ROWS = 40;
     const DENSITY_WEIGHT_BAND_DEG = 4;
-    const GOOD_RMS_RESIDUAL = 0.035;
-    const WARN_RMS_RESIDUAL = 0.075;
-    const GOOD_SIGMA_DEG = 0.25;
-    const WARN_SIGMA_DEG = 0.75;
-    const MIN_SPREAD_RATIO = 4;
+    const MIN_DENSITY_WEIGHT = 0.5;
+    const MAX_DENSITY_WEIGHT = 2;
+    const ROBUST_MAX_ITERATIONS = 10;
+    const ROBUST_TUKEY_C = 4.685;
+    const ROBUST_HUBER_K = 1.5;
+    const ROBUST_MIN_SCALE = 0.00075;
+    const GOOD_RMS_RESIDUAL = 0.008;
+    const WARN_RMS_RESIDUAL = 0.020;
+    const GOOD_STANDARD_ERROR_DEG = 0.10;
+    const WARN_STANDARD_ERROR_DEG = 0.30;
+    const MIN_ANGULAR_SPAN_DEG = 3;
+    const MIN_PLANE_SEPARATION_RATIO = 4;
+    const DEBUG_MODE = new URLSearchParams(location.search).get("debug");
 
     const state = {
       latestGravity: null,
@@ -488,11 +503,13 @@
       baselinePending: false,
       wasStill: false,
       stillSessionPointCount: 0,
+      activeStillSessionId: null,
+      nextSessionId: 1,
       lastAutoAddAt: 0,
       screenOutNormal: v(0, 0, 1),
       audioContext: null,
       wakeLock: null,
-      debug: new URLSearchParams(location.search).get("debug") === "1"
+      debug: DEBUG_MODE === "1" || DEBUG_MODE === "auto" || DEBUG_MODE === "outlier"
     };
 
     const els = {
@@ -758,6 +775,23 @@
       return Math.sqrt(mean(values.map((n) => (n - m) ** 2)));
     }
 
+    function median(values) {
+      if (values.length === 0) {
+        return 0;
+      }
+      const sorted = values.slice().sort((a, b) => a - b);
+      const middle = Math.floor(sorted.length / 2);
+      return sorted.length % 2 === 0
+        ? (sorted[middle - 1] + sorted[middle]) / 2
+        : sorted[middle];
+    }
+
+    function createSessionId(prefix = "S") {
+      const id = `${prefix}${String(state.nextSessionId).padStart(3, "0")}`;
+      state.nextSessionId += 1;
+      return id;
+    }
+
     function recordBaseline() {
       requestWakeLock();
       state.baselinePending = true;
@@ -788,6 +822,8 @@
       state.lastAutoAddAt = 0;
       state.wasStill = false;
       state.stillSessionPointCount = 0;
+      state.activeStillSessionId = null;
+      state.nextSessionId = 1;
       playCaptureSound();
       setStatus("静止を検出して直進基準を記録しました。続けて測定点を自動追加します。");
       maybeAutoAddPoint(true);
@@ -801,15 +837,17 @@
         return;
       }
 
-      const fitted = addPointFromSummary(summary, `手動${state.points.length + 1}`);
-      setStatus(fitted ? `測定点 ${state.points.length} を追加し、推定結果を更新しました。` : `測定点 ${state.points.length} を追加しました。`);
+      const fitted = addPointFromSummary(summary, `手動${state.points.length + 1}`, createSessionId("M"));
+      const sessionCount = buildSessionRepresentatives(state.points).length;
+      setStatus(fitted ? `手動位置 ${sessionCount} を追加し、推定結果を更新しました。` : `手動位置 ${sessionCount} を追加しました。`);
       render();
     }
 
-    function addPointFromSummary(summary, pointType) {
+    function addPointFromSummary(summary, pointType, sessionId = createSessionId()) {
       state.points.push({
         ...summary,
         pointType,
+        sessionId,
         timestamp: new Date().toISOString(),
         usedForFit: true,
         excludedReason: summary.excludedReason || ""
@@ -833,13 +871,18 @@
     }
 
     function choosePointToTrim() {
-      const autoIndexes = state.points
+      const sessionCounts = new Map();
+      state.points.forEach((point, index) => {
+        const sessionId = point.sessionId || `legacy-${index}`;
+        sessionCounts.set(sessionId, (sessionCounts.get(sessionId) || 0) + 1);
+      });
+      const duplicateIndexes = state.points
         .map((point, index) => ({ point, index }))
-        .filter(({ point }) => String(point.pointType).startsWith("自動"))
+        .filter(({ point, index }) => sessionCounts.get(point.sessionId || `legacy-${index}`) > 1)
         .map(({ index }) => index);
-      const candidates = autoIndexes.length > 0 ? autoIndexes : state.points.map((_, index) => index);
+      const candidates = duplicateIndexes.length > 0 ? duplicateIndexes : state.points.map((_, index) => index);
 
-      if (state.points.length < MIN_FIT_POINTS) {
+      if (state.points.length < MIN_FIT_SESSIONS) {
         return candidates[0];
       }
 
@@ -847,8 +890,9 @@
       let axis = null;
       let c = 0;
       try {
-        const weights = computeDensityWeights(vectors);
-        const fit = fitPlane(vectors, weights);
+        const robust = robustFitPlane(vectors, computeDensityWeights(vectors));
+        const weights = robust.weights;
+        const fit = robust.fit;
         axis = fit.axis;
         if (state.baseline && dot(axis, getFrame().verticalUp) < 0) {
           axis = scale(axis, -1);
@@ -868,7 +912,7 @@
       for (const index of candidates) {
         const residualScore = residuals[index] / maxResidual;
         const densityScore = densities[index] / maxDensity;
-        const ageScore = index / Math.max(state.points.length - 1, 1);
+        const ageScore = 1 - index / Math.max(state.points.length - 1, 1);
         const score = 0.55 * residualScore + 0.35 * densityScore + 0.10 * ageScore;
         if (score > bestScore) {
           bestScore = score;
@@ -888,6 +932,7 @@
       if (!summary.ok) {
         state.wasStill = false;
         state.stillSessionPointCount = 0;
+        state.activeStillSessionId = null;
         return;
       }
 
@@ -895,6 +940,7 @@
         state.wasStill = true;
         state.stillSessionPointCount = 0;
         state.lastAutoAddAt = 0;
+        state.activeStillSessionId = createSessionId();
       }
 
       if (state.stillSessionPointCount >= AUTO_ADD_POINTS_PER_STILL_SESSION) {
@@ -908,16 +954,19 @@
       const fitted = addPointFromSummary({
         ...summary,
         excludedReason: ""
-      }, `自動${state.points.length + 1}`);
+      }, `自動${state.points.length + 1}`, state.activeStillSessionId);
       state.lastAutoAddAt = now;
       state.stillSessionPointCount += 1;
-      setStatus(fitted ? `静止を検出して測定点 ${state.points.length} を自動追加し、推定結果を更新しました。` : `静止を検出して測定点 ${state.points.length} を自動追加しました。`);
+      const sessionCount = buildSessionRepresentatives(state.points).length;
+      setStatus(fitted
+        ? `静止位置 ${sessionCount}（取得 ${state.stillSessionPointCount}/2）を更新し、推定結果を再計算しました。`
+        : `静止位置 ${sessionCount}（取得 ${state.stillSessionPointCount}/2）を記録しました。`);
       render();
     }
 
     function updateFitIfReady() {
       const usable = state.points.filter((point) => point.usedForFit);
-      if (!state.baseline || usable.length < MIN_FIT_POINTS) {
+      if (!state.baseline || buildSessionRepresentatives(usable).length < MIN_FIT_SESSIONS) {
         return false;
       }
       state.result = calculateCasterResult(usable);
@@ -939,15 +988,21 @@
      * vertical, lateral, and forward components. The baseline sample itself is
      * not included in the plane-fit point set below.
      *
-     * Points are density-weighted before fitting so that many samples captured
-     * at nearly the same attitude do not dominate sparse steering regions.
-     * Caster uncertainty is estimated from leave-one-out variation of the
-     * weighted fit and displayed as sigma and an approximate 95% range.
+     * Captures from the same stationary steering position are first combined
+     * into one session representative. Density weights are capped, then Tukey
+     * iteratively reweighted least squares rejects clear outliers.
+     * Caster uncertainty is a session-level delete-one jackknife standard
+     * error with an approximate 95% range.
      */
     function calculateCasterResult(usable, includeUncertainty = true) {
-      const vectors = usable.map((point) => point.normalized);
-      const weights = computeDensityWeights(vectors);
-      const fit = fitPlane(vectors, weights);
+      return calculateCasterFromSessions(buildSessionRepresentatives(usable), includeUncertainty, usable.length);
+    }
+
+    function calculateCasterFromSessions(sessions, includeUncertainty = true, rawPointCount = sessions.length) {
+      const vectors = sessions.map((session) => session.normalized);
+      const robust = robustFitPlane(vectors, computeDensityWeights(vectors));
+      const fit = robust.fit;
+      const weights = robust.weights;
       let axis = fit.axis;
       const frame = getFrame();
 
@@ -964,10 +1019,19 @@
       const saiSignedDeg = Math.atan2(dot(axis, frame.lateral), dot(axis, frame.verticalUp)) * 180 / Math.PI;
       const casterDeg = Math.abs(casterSignedDeg);
       const saiDeg = Math.abs(saiSignedDeg);
-      const spreadRatio = fit.eigenvalues[2] / Math.max(fit.eigenvalues[1], 1e-9);
-      const uncertainty = includeUncertainty ? estimateCasterUncertainty(usable) : null;
-      const sigmaDeg = uncertainty ? uncertainty.sigmaDeg : NaN;
-      const quality = judgeQuality(rmsResidual, usable.length, spreadRatio, sigmaDeg);
+      const planeSeparationRatio = fit.eigenvalues[1] / Math.max(fit.eigenvalues[0], 1e-9);
+      const angularSpanDeg = maxPairwiseAngleDeg(vectors);
+      const uncertainty = includeUncertainty ? estimateCasterUncertainty(sessions) : null;
+      const standardErrorDeg = uncertainty ? uncertainty.standardErrorDeg : NaN;
+      const outlierCount = robust.robustWeights.filter((weight) => weight < 0.5).length;
+      const quality = judgeQuality({
+        rmsResidual,
+        sessionCount: sessions.length,
+        planeSeparationRatio,
+        angularSpanDeg,
+        standardErrorDeg,
+        outlierCount
+      });
 
       return {
         casterDeg,
@@ -983,13 +1047,54 @@
         lateral: frame.lateral,
         forward: frame.forward,
         quality,
-        spreadRatio,
-        pointCount: usable.length,
+        planeSeparationRatio,
+        angularSpanDeg,
+        pointCount: sessions.length,
+        rawPointCount,
         weights,
+        robustWeights: robust.robustWeights,
+        sessionIds: sessions.map((session) => session.sessionId),
+        outlierCount,
         effectivePointCount: effectiveCount(weights),
-        sigmaDeg,
+        standardErrorDeg,
         uncertainty95Deg: uncertainty ? uncertainty.uncertainty95Deg : NaN
       };
+    }
+
+    function buildSessionRepresentatives(points) {
+      const groups = new Map();
+      points.forEach((point, index) => {
+        const sessionId = point.sessionId || `legacy-${index}`;
+        if (!groups.has(sessionId)) {
+          groups.set(sessionId, []);
+        }
+        groups.get(sessionId).push(point);
+      });
+
+      return Array.from(groups, ([sessionId, captures]) => {
+        const normalized = normalize(scale(
+          captures.reduce((acc, point) => add(acc, point.normalized), v(0, 0, 0)),
+          1 / captures.length
+        ));
+        const rawMean = scale(
+          captures.reduce((acc, point) => add(acc, point.rawMean), v(0, 0, 0)),
+          1 / captures.length
+        );
+        const angularScatterDeg = Math.sqrt(mean(captures.map((point) => {
+          const angleDeg = vectorAngleRad(point.normalized, normalized) * 180 / Math.PI;
+          return angleDeg * angleDeg;
+        })));
+
+        return {
+          sessionId,
+          normalized,
+          rawMean,
+          captureCount: captures.length,
+          sampleCount: captures.reduce((sum, point) => sum + point.sampleCount, 0),
+          angularScatterDeg,
+          pointType: captures[0].pointType
+        };
+      });
     }
 
     function computeDensityWeights(points) {
@@ -998,8 +1103,11 @@
       }
 
       const raw = computePointDensities(points).map((density) => 1 / Math.max(density, 1e-9));
-      const avg = mean(raw);
-      return raw.map((w) => w / Math.max(avg, 1e-9));
+      const normalized = normalizeWeights(raw);
+      return normalizeWeights(normalized.map((weight) => Math.min(
+        MAX_DENSITY_WEIGHT,
+        Math.max(MIN_DENSITY_WEIGHT, weight)
+      )));
     }
 
     function computePointDensities(points) {
@@ -1017,6 +1125,97 @@
     function vectorAngleRad(a, b) {
       const cos = Math.max(-1, Math.min(1, dot(normalize(a), normalize(b))));
       return Math.acos(cos);
+    }
+
+    function maxPairwiseAngleDeg(points) {
+      let maxAngle = 0;
+      for (let i = 0; i < points.length; i += 1) {
+        for (let j = i + 1; j < points.length; j += 1) {
+          maxAngle = Math.max(maxAngle, vectorAngleRad(points[i], points[j]));
+        }
+      }
+      return maxAngle * 180 / Math.PI;
+    }
+
+    function normalizeWeights(weights) {
+      if (weights.length === 0) {
+        return [];
+      }
+      const avg = mean(weights);
+      return weights.map((weight) => weight / Math.max(avg, 1e-9));
+    }
+
+    function robustFitPlane(points, baseWeights = points.map(() => 1)) {
+      let weights = normalizeWeights(baseWeights);
+      let robustWeights = points.map(() => 1);
+      let fit = selectRobustInitialFit(points, weights);
+
+      for (let iteration = 0; iteration < ROBUST_MAX_ITERATIONS; iteration += 1) {
+        const projections = points.map((point) => dot(fit.axis, point));
+        robustWeights = computeRobustWeights(projections);
+        const nextWeights = normalizeWeights(baseWeights.map((weight, index) => weight * robustWeights[index]));
+        const change = Math.max(...nextWeights.map((weight, index) => Math.abs(weight - weights[index])));
+        weights = nextWeights;
+        fit = fitPlane(points, weights);
+        if (change < 1e-4) {
+          break;
+        }
+      }
+
+      const finalProjections = points.map((point) => dot(fit.axis, point));
+      robustWeights = computeRobustWeights(finalProjections);
+
+      return { fit, weights, robustWeights };
+    }
+
+    function computeRobustWeights(projections) {
+      const offset = median(projections);
+      const residuals = projections.map((projection) => projection - offset);
+      const robustScale = Math.max(
+        ROBUST_MIN_SCALE,
+        1.4826 * median(residuals.map((residual) => Math.abs(residual)))
+      );
+      const cutoff = ROBUST_TUKEY_C * robustScale;
+      const tukeyWeights = residuals.map((residual) => {
+        const ratio = Math.abs(residual) / cutoff;
+        return ratio < 1 ? (1 - ratio * ratio) ** 2 : 0;
+      });
+
+      if (tukeyWeights.filter((weight) => weight > 0).length >= MIN_FIT_SESSIONS) {
+        return tukeyWeights;
+      }
+
+      const huberCutoff = ROBUST_HUBER_K * robustScale;
+      return residuals.map((residual) => {
+        const absolute = Math.abs(residual);
+        return absolute <= huberCutoff ? 1 : huberCutoff / Math.max(absolute, 1e-9);
+      });
+    }
+
+    function selectRobustInitialFit(points, weights) {
+      let bestFit = fitPlane(points, weights);
+      let bestScore = robustPlaneScore(bestFit.axis, points);
+      if (points.length <= MIN_FIT_SESSIONS) {
+        return bestFit;
+      }
+
+      for (let excluded = 0; excluded < points.length; excluded += 1) {
+        const subset = points.filter((_, index) => index !== excluded);
+        const subsetWeights = weights.filter((_, index) => index !== excluded);
+        const candidate = fitPlane(subset, subsetWeights);
+        const score = robustPlaneScore(candidate.axis, points);
+        if (score < bestScore) {
+          bestScore = score;
+          bestFit = candidate;
+        }
+      }
+      return bestFit;
+    }
+
+    function robustPlaneScore(axis, points) {
+      const projections = points.map((point) => dot(axis, point));
+      const offset = median(projections);
+      return median(projections.map((projection) => Math.abs(projection - offset)));
     }
 
     function weightedMeanVec(points, weights) {
@@ -1050,17 +1249,17 @@
       return sumSq > 1e-9 ? (sum * sum) / sumSq : 0;
     }
 
-    function estimateCasterUncertainty(usable) {
-      if (usable.length <= MIN_FIT_POINTS) {
+    function estimateCasterUncertainty(sessions) {
+      if (sessions.length <= MIN_FIT_SESSIONS) {
         return null;
       }
 
-      const source = thinPointsForUncertainty(usable);
+      const source = thinSessionsForUncertainty(sessions);
       const casters = [];
       for (let i = 0; i < source.length; i += 1) {
         const subset = source.filter((_, index) => index !== i);
-        if (subset.length >= MIN_FIT_POINTS) {
-          casters.push(calculateCasterResult(subset, false).casterDeg);
+        if (subset.length >= MIN_FIT_SESSIONS) {
+          casters.push(calculateCasterFromSessions(subset, false).casterDeg);
         }
       }
 
@@ -1068,23 +1267,25 @@
         return null;
       }
 
-      const sigmaDeg = std(casters);
+      const center = mean(casters);
+      const sumSquares = casters.reduce((sum, caster) => sum + (caster - center) ** 2, 0);
+      const standardErrorDeg = Math.sqrt(((casters.length - 1) / casters.length) * sumSquares);
       return {
-        sigmaDeg,
-        uncertainty95Deg: 1.96 * sigmaDeg
+        standardErrorDeg,
+        uncertainty95Deg: 1.96 * standardErrorDeg
       };
     }
 
-    function thinPointsForUncertainty(points) {
-      if (points.length <= MAX_UNCERTAINTY_POINTS) {
-        return points;
+    function thinSessionsForUncertainty(sessions) {
+      if (sessions.length <= MAX_UNCERTAINTY_SESSIONS) {
+        return sessions;
       }
 
       const thinned = [];
-      const last = points.length - 1;
-      for (let i = 0; i < MAX_UNCERTAINTY_POINTS; i += 1) {
-        const index = Math.round(i * last / (MAX_UNCERTAINTY_POINTS - 1));
-        thinned.push(points[index]);
+      const last = sessions.length - 1;
+      for (let i = 0; i < MAX_UNCERTAINTY_SESSIONS; i += 1) {
+        const index = Math.round(i * last / (MAX_UNCERTAINTY_SESSIONS - 1));
+        thinned.push(sessions[index]);
       }
       return thinned;
     }
@@ -1187,20 +1388,33 @@
       };
     }
 
-    function judgeQuality(rmsResidual, pointCount, spreadRatio, sigmaDeg) {
-      if (pointCount < 7) {
-        return "点数不足";
+    function judgeQuality({
+      rmsResidual,
+      sessionCount,
+      planeSeparationRatio,
+      angularSpanDeg,
+      standardErrorDeg,
+      outlierCount
+    }) {
+      if (sessionCount < MIN_FIT_SESSIONS + 2) {
+        return "位置数不足";
       }
-      if (spreadRatio < MIN_SPREAD_RATIO) {
+      if (angularSpanDeg < MIN_ANGULAR_SPAN_DEG) {
         return "転舵範囲不足";
       }
-      if (Number.isFinite(sigmaDeg) && sigmaDeg > WARN_SIGMA_DEG) {
+      if (planeSeparationRatio < MIN_PLANE_SEPARATION_RATIO) {
+        return "軸推定不安定";
+      }
+      if (outlierCount > Math.max(1, Math.floor(sessionCount * 0.25))) {
+        return "外れ値多い";
+      }
+      if (Number.isFinite(standardErrorDeg) && standardErrorDeg > WARN_STANDARD_ERROR_DEG) {
         return "推定ばらつき大";
       }
-      if (rmsResidual <= GOOD_RMS_RESIDUAL) {
+      if (rmsResidual <= GOOD_RMS_RESIDUAL && outlierCount === 0) {
         return "良好";
       }
-      if (rmsResidual <= WARN_RMS_RESIDUAL || (Number.isFinite(sigmaDeg) && sigmaDeg <= WARN_SIGMA_DEG)) {
+      if (rmsResidual <= WARN_RMS_RESIDUAL || (Number.isFinite(standardErrorDeg) && standardErrorDeg <= WARN_STANDARD_ERROR_DEG)) {
         return "要確認";
       }
       return "揺れまたは固定不良";
@@ -1228,7 +1442,7 @@
       renderResult();
       renderTable();
       renderMountStatus();
-      els.pointCount.textContent = String(state.points.length);
+      els.pointCount.textContent = `${buildSessionRepresentatives(state.points).length} / ${state.points.length}`;
       els.debugBtn.hidden = !state.debug;
       els.csvBtn.disabled = state.points.length === 0;
       els.removeBtn.disabled = state.points.length === 0;
@@ -1243,11 +1457,12 @@
         els.mountStatus.textContent = "1. 画面を外側へ向けて固定し、直進基準を記録";
         return;
       }
-      if (state.points.length < MIN_FIT_POINTS) {
-        els.mountStatus.textContent = `準備完了。あと ${MIN_FIT_POINTS - state.points.length} 点で自動推定`;
+      const sessionCount = buildSessionRepresentatives(state.points).length;
+      if (sessionCount < MIN_FIT_SESSIONS) {
+        els.mountStatus.textContent = `準備完了。あと ${MIN_FIT_SESSIONS - sessionCount} 位置で自動推定`;
         return;
       }
-      els.mountStatus.textContent = "準備完了。静止するたびに2点だけ自動追加";
+      els.mountStatus.textContent = "準備完了。静止ごとに2回取得して1位置に集約";
     }
 
     function renderResult() {
@@ -1256,19 +1471,19 @@
       els.sai.textContent = result ? fmtDeg(result.saiDeg) : "--";
       els.rms.textContent = result ? fmt(result.rmsResidual, 4) : "--";
       els.quality.textContent = result ? stabilityLabel(result) : "--";
-      els.uncertainty.textContent = result && Number.isFinite(result.uncertainty95Deg) ? `σ${result.sigmaDeg.toFixed(2)} ±${result.uncertainty95Deg.toFixed(2)}°` : "--";
+      els.uncertainty.textContent = result && Number.isFinite(result.uncertainty95Deg) ? `SE${result.standardErrorDeg.toFixed(2)} ±${result.uncertainty95Deg.toFixed(2)}°` : "--";
       els.quality.className = `value ${result && stabilityLabel(result) === "安定" ? "good" : ""}`;
-      els.uncertainty.className = `value ${result && Number.isFinite(result.sigmaDeg) && result.sigmaDeg <= GOOD_SIGMA_DEG ? "good" : ""}`;
+      els.uncertainty.className = `value ${result && Number.isFinite(result.standardErrorDeg) && result.standardErrorDeg <= GOOD_STANDARD_ERROR_DEG ? "good" : ""}`;
     }
 
     function stabilityLabel(result) {
-      if (!Number.isFinite(result.sigmaDeg)) {
+      if (!Number.isFinite(result.standardErrorDeg)) {
         return result.quality;
       }
-      if (result.sigmaDeg <= GOOD_SIGMA_DEG && result.rmsResidual <= GOOD_RMS_RESIDUAL) {
+      if (result.quality === "良好" && result.standardErrorDeg <= GOOD_STANDARD_ERROR_DEG && result.rmsResidual <= GOOD_RMS_RESIDUAL) {
         return "安定";
       }
-      if (result.sigmaDeg <= WARN_SIGMA_DEG && result.rmsResidual <= WARN_RMS_RESIDUAL) {
+      if (result.standardErrorDeg <= WARN_STANDARD_ERROR_DEG && result.rmsResidual <= WARN_RMS_RESIDUAL) {
         return "要確認";
       }
       return "不安定";
@@ -1290,6 +1505,7 @@
       return `
         <tr>
           <td>${index}</td>
+          <td>${escapeHtml(isBaseline ? "基準" : point.sessionId || "-")}</td>
           <td>${escapeHtml(point.pointType)}</td>
           <td>${fmt(point.normalized[0])}</td>
           <td>${fmt(point.normalized[1])}</td>
@@ -1334,6 +1550,8 @@
       state.lastAutoAddAt = 0;
       state.wasStill = false;
       state.stillSessionPointCount = 0;
+      state.activeStillSessionId = null;
+      state.nextSessionId = 1;
       state.screenOutNormal = v(0, 0, 1);
       releaseWakeLock();
       setStatus("全測定点をクリアしました。");
@@ -1344,6 +1562,7 @@
       const lines = [];
       lines.push([
         "point_index",
+        "session_id",
         "point_type",
         "timestamp",
         "gx_raw_mean",
@@ -1358,13 +1577,21 @@
         "std_z",
         "std_magnitude",
         "used_for_fit",
+        "fit_weight",
         "excluded_reason"
       ].join(","));
 
       const allPoints = state.baseline ? [state.baseline, ...state.points] : state.points;
+      const sessionWeights = new Map();
+      if (state.result) {
+        state.result.sessionIds.forEach((sessionId, index) => {
+          sessionWeights.set(sessionId, state.result.weights[index]);
+        });
+      }
       allPoints.forEach((point, index) => {
         lines.push(csvRow([
           index,
+          point.sessionId || (index === 0 && state.baseline ? "BASE" : ""),
           point.pointType,
           point.timestamp,
           ...point.rawMean,
@@ -1373,6 +1600,7 @@
           ...point.axisStd,
           point.magStd,
           index === 0 && state.baseline ? "baseline" : point.usedForFit,
+          sessionWeights.get(point.sessionId) ?? "",
           point.excludedReason || ""
         ]));
       });
@@ -1401,8 +1629,13 @@
           "eigenvalue_0",
           "eigenvalue_1",
           "eigenvalue_2",
-          "effective_point_count",
-          "caster_sigma_deg",
+          "raw_capture_count",
+          "session_count",
+          "effective_session_count",
+          "angular_span_deg",
+          "plane_separation_ratio",
+          "robust_outlier_count",
+          "caster_standard_error_deg",
           "caster_uncertainty_95_deg",
           "stability",
           "quality"
@@ -1419,8 +1652,13 @@
           state.result.rmsResidual,
           state.result.maxResidual,
           ...state.result.eigenvalues,
+          state.result.rawPointCount,
+          state.result.pointCount,
           state.result.effectivePointCount,
-          state.result.sigmaDeg,
+          state.result.angularSpanDeg,
+          state.result.planeSeparationRatio,
+          state.result.outlierCount,
+          state.result.standardErrorDeg,
           state.result.uncertainty95Deg,
           stabilityLabel(state.result),
           state.result.quality
@@ -1443,8 +1681,9 @@
       }).join(",");
     }
 
-    function addDebugData() {
-      state.baseline = makePoint(v(0, 0, 9.81), "直進基準");
+    function addDebugData(includeOutlier = false) {
+      state.nextSessionId = 1;
+      state.baseline = makePoint(v(0, 0, 9.81), "直進基準", "BASE");
       state.points = [];
 
       const frame = getFrame();
@@ -1455,22 +1694,47 @@
         axis = scale(axis, -1);
       }
 
-      const start = normalize(sub(frame.verticalUp, scale(axis, dot(frame.verticalUp, axis))));
-      const second = normalize(cross(axis, start));
+      const straightGravity = state.baseline.normalized;
       [-32, -20, -10, 0, 10, 20, 32].forEach((deg) => {
         const rad = deg * Math.PI / 180;
-        const noise = () => (Math.random() - 0.5) * 0.004;
-        const g = normalize(add(add(scale(start, Math.cos(rad)), scale(second, Math.sin(rad))), v(noise(), noise(), noise())));
-        state.points.push(makePoint(scale(g, 9.81), deg < 0 ? "左" : deg > 0 ? "右" : "直進"));
+        const sessionId = createSessionId("D");
+        for (let capture = 0; capture < 2; capture += 1) {
+          const rotated = rotateAroundAxis(straightGravity, axis, rad);
+          const noise = v(
+            Math.sin((deg + 41) * (capture + 1)) * 0.00025,
+            Math.cos((deg - 13) * (capture + 2)) * 0.00025,
+            Math.sin((deg + 7) * (capture + 3)) * 0.00025
+          );
+          const g = normalize(add(rotated, noise));
+          state.points.push(makePoint(scale(g, 9.81), deg < 0 ? "左" : deg > 0 ? "右" : "直進", sessionId));
+        }
       });
+
+      if (includeOutlier) {
+        const sessionId = createSessionId("X");
+        const rotated = rotateAroundAxis(straightGravity, axis, 15 * Math.PI / 180);
+        const axisTangent = normalize(sub(axis, scale(rotated, dot(axis, rotated))));
+        const outlier = normalize(add(rotated, scale(axisTangent, 0.08)));
+        state.points.push(makePoint(scale(outlier, 9.81), "外れ値テスト", sessionId));
+        state.points.push(makePoint(scale(outlier, 9.81), "外れ値テスト", sessionId));
+      }
 
       state.result = null;
       updateFitIfReady();
-      setStatus("模擬データを追加し、推定結果を更新しました。");
+      setStatus(includeOutlier
+        ? `外れ値を含む模擬データを追加しました（検出 ${state.result ? state.result.outlierCount : 0} 位置）。`
+        : "模擬データを追加し、推定結果を更新しました。");
       render();
     }
 
-    function makePoint(raw, pointType) {
+    function rotateAroundAxis(point, axis, angle) {
+      return add(
+        add(scale(point, Math.cos(angle)), scale(cross(axis, point), Math.sin(angle))),
+        scale(axis, dot(axis, point) * (1 - Math.cos(angle)))
+      );
+    }
+
+    function makePoint(raw, pointType, sessionId = createSessionId()) {
       return {
         rawMean: raw,
         normalized: normalize(raw),
@@ -1479,6 +1743,7 @@
         magStd: 0.02,
         timestamp: new Date().toISOString(),
         pointType,
+        sessionId,
         usedForFit: true,
         excludedReason: ""
       };
@@ -1493,10 +1758,11 @@
     els.removeBtn.addEventListener("click", removeLastPoint);
     els.clearBtn.addEventListener("click", clearPoints);
     els.csvBtn.addEventListener("click", exportCsv);
-    els.debugBtn.addEventListener("click", addDebugData);
+    els.debugBtn.addEventListener("click", () => addDebugData(false));
     [els.reverseForward].forEach((el) => {
       el.addEventListener("change", () => {
         state.result = null;
+        updateFitIfReady();
         render();
       });
     });
@@ -1507,6 +1773,9 @@
     });
 
     render();
+    if (DEBUG_MODE === "auto" || DEBUG_MODE === "outlier") {
+      addDebugData(DEBUG_MODE === "outlier");
+    }
   </script>
 </body>
 </html>
