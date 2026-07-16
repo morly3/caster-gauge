@@ -474,7 +474,7 @@
     const MAX_AXIS_STD = 0.08;
     const MAX_MAG_STD = 0.12;
     const MIN_FIT_POINTS = 5;
-    const AUTO_ADD_COOLDOWN_MS = 1800;
+    const AUTO_ADD_COOLDOWN_MS = 1000;
     const AUTO_ADD_MIN_ANGLE_DEG = 2;
     const MAX_MEASUREMENT_POINTS = 80;
     const MAX_UNCERTAINTY_POINTS = 32;
@@ -603,14 +603,19 @@
       const gain = audio.createGain();
       osc.type = "sine";
       osc.frequency.setValueAtTime(880, now);
-      osc.frequency.exponentialRampToValueAtTime(1320, now + 0.08);
+      osc.frequency.exponentialRampToValueAtTime(1320, now + 0.07);
       gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.28, now + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+      gain.gain.exponentialRampToValueAtTime(0.45, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
       osc.connect(gain);
       gain.connect(audio.destination);
       osc.start(now);
-      osc.stop(now + 0.18);
+      osc.stop(now + 0.16);
+    }
+
+    function playStableSound() {
+      playCaptureSound();
+      window.setTimeout(playCaptureSound, 120);
     }
 
     function getFrame() {
@@ -788,8 +793,13 @@
       });
       trimMeasurementPoints();
       state.result = null;
-      playCaptureSound();
-      return updateFitIfReady();
+      const fitted = updateFitIfReady();
+      if (fitted && Number.isFinite(state.result.uncertainty95Deg) && state.result.uncertainty95Deg < 0.1) {
+        playStableSound();
+      } else {
+        playCaptureSound();
+      }
+      return fitted;
     }
 
     function trimMeasurementPoints() {
