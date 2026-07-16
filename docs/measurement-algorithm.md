@@ -60,7 +60,7 @@ Current v0.4.1 capture thresholds are conservative again after field testing sho
 - minimum samples: 20
 - maximum per-axis standard deviation: 0.08
 - maximum magnitude standard deviation: 0.12
-- automatic-add cooldown: 1800 ms
+- automatic-add cooldown: 1000 ms
 - minimum angular difference for automatic add: 2 degrees
 - retained measurement points: 80
 - points used for leave-one-out uncertainty: up to 32
