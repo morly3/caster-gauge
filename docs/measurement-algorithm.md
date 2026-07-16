@@ -1,6 +1,6 @@
 # Measurement Algorithm
 
-- Version: v0.4.0
+- Version: v0.4.1
 - Updated: 2026-07-16
 
 ## Overview
@@ -52,13 +52,19 @@ Measurement points can be added manually or automatically. Automatic addition us
 
 When the phone remains still, the current implementation continues adding points at the cooldown interval. Duplicate or dense captures are handled by density weighting during fitting rather than by rejecting every nearby point.
 
-Current v0.4.0 capture thresholds are intentionally a little permissive for field testing:
+Current v0.4.1 capture thresholds are conservative again after field testing showed that permissive high-rate capture did not improve the displayed uncertainty enough and could overload mobile browsers:
 
-- sample window: 900 ms
-- minimum samples: 12
-- maximum per-axis standard deviation: 0.12
-- maximum magnitude standard deviation: 0.16
-- automatic-add cooldown: 900 ms
+- sample window: 1200 ms
+- minimum samples: 20
+- maximum per-axis standard deviation: 0.08
+- maximum magnitude standard deviation: 0.12
+- automatic-add cooldown: 1800 ms
+- minimum angular difference for automatic add: 2 degrees
+- retained measurement points: 80
+- points used for leave-one-out uncertainty: up to 32
+- rendered point rows: latest 40 plus baseline
+
+When the retained measurement-point limit is exceeded, the app preferentially removes automatic points with a high trim score. The score combines plane residual, angular-density score, and age, so outliers and over-represented dense regions are removed before sparse useful regions when possible.
 
 The steering angle in degrees is not acquired, calculated, or used as an input.
 

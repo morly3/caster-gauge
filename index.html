@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Caster Gauge v0.4.0 - 2026-07-16</title>
+  <title>Caster Gauge v0.4.1 - 2026-07-16</title>
   <style>
     :root {
       --bg: #0b0f14;
@@ -345,7 +345,7 @@
 </head>
 <body>
   <header>
-    <h1>Caster Gauge v0.4.0</h1>
+    <h1>Caster Gauge v0.4.1</h1>
     <div class="sub">更新日: 2026-07-16</div>
     <div class="sub">重力ベクトルの平面フィットでステアリング軸を推定</div>
   </header>
@@ -469,13 +469,16 @@
   </main>
 
   <script>
-    const SAMPLE_DURATION_MS = 900;
-    const MIN_SAMPLE_COUNT = 12;
-    const MAX_AXIS_STD = 0.12;
-    const MAX_MAG_STD = 0.16;
+    const SAMPLE_DURATION_MS = 1200;
+    const MIN_SAMPLE_COUNT = 20;
+    const MAX_AXIS_STD = 0.08;
+    const MAX_MAG_STD = 0.12;
     const MIN_FIT_POINTS = 5;
-    const AUTO_ADD_COOLDOWN_MS = 900;
-    const AUTO_ADD_MIN_ANGLE_DEG = 0;
+    const AUTO_ADD_COOLDOWN_MS = 1800;
+    const AUTO_ADD_MIN_ANGLE_DEG = 2;
+    const MAX_MEASUREMENT_POINTS = 80;
+    const MAX_UNCERTAINTY_POINTS = 32;
+    const MAX_RENDERED_POINT_ROWS = 40;
     const DENSITY_WEIGHT_BAND_DEG = 4;
     const GOOD_RMS_RESIDUAL = 0.035;
     const WARN_RMS_RESIDUAL = 0.075;
@@ -765,9 +768,63 @@
         usedForFit: true,
         excludedReason: ""
       });
+      trimMeasurementPoints();
       state.result = null;
       playCaptureSound();
       return updateFitIfReady();
+    }
+
+    function trimMeasurementPoints() {
+      while (state.points.length > MAX_MEASUREMENT_POINTS) {
+        const removableIndex = choosePointToTrim();
+        state.points.splice(removableIndex, 1);
+      }
+    }
+
+    function choosePointToTrim() {
+      const autoIndexes = state.points
+        .map((point, index) => ({ point, index }))
+        .filter(({ point }) => String(point.pointType).startsWith("自動"))
+        .map(({ index }) => index);
+      const candidates = autoIndexes.length > 0 ? autoIndexes : state.points.map((_, index) => index);
+
+      if (state.points.length < MIN_FIT_POINTS) {
+        return candidates[0];
+      }
+
+      const vectors = state.points.map((point) => point.normalized);
+      let axis = null;
+      let c = 0;
+      try {
+        const weights = computeDensityWeights(vectors);
+        const fit = fitPlane(vectors, weights);
+        axis = fit.axis;
+        if (state.baseline && dot(axis, getFrame().verticalUp) < 0) {
+          axis = scale(axis, -1);
+        }
+        c = weightedMean(vectors.map((g) => dot(axis, g)), weights);
+      } catch (_) {
+        return candidates[0];
+      }
+
+      const densities = computePointDensities(vectors);
+      const maxDensity = Math.max(...densities, 1e-9);
+      const residuals = vectors.map((g) => Math.abs(dot(axis, g) - c));
+      const maxResidual = Math.max(...residuals, 1e-9);
+
+      let bestIndex = candidates[0];
+      let bestScore = -Infinity;
+      for (const index of candidates) {
+        const residualScore = residuals[index] / maxResidual;
+        const densityScore = densities[index] / maxDensity;
+        const ageScore = index / Math.max(state.points.length - 1, 1);
+        const score = 0.55 * residualScore + 0.35 * densityScore + 0.10 * ageScore;
+        if (score > bestScore) {
+          bestScore = score;
+          bestIndex = index;
+        }
+      }
+      return bestIndex;
     }
 
     function maybeAutoAddPoint() {
@@ -875,17 +932,21 @@
         return [];
       }
 
+      const raw = computePointDensities(points).map((density) => 1 / Math.max(density, 1e-9));
+      const avg = mean(raw);
+      return raw.map((w) => w / Math.max(avg, 1e-9));
+    }
+
+    function computePointDensities(points) {
       const band = DENSITY_WEIGHT_BAND_DEG * Math.PI / 180;
-      const raw = points.map((point, index) => {
+      return points.map((point) => {
         let density = 0;
         for (let i = 0; i < points.length; i += 1) {
           const angle = vectorAngleRad(point, points[i]);
           density += Math.exp(-((angle / band) ** 2));
         }
-        return 1 / Math.max(density, 1e-9);
+        return density;
       });
-      const avg = mean(raw);
-      return raw.map((w) => w / Math.max(avg, 1e-9));
     }
 
     function vectorAngleRad(a, b) {
@@ -929,9 +990,10 @@
         return null;
       }
 
+      const source = thinPointsForUncertainty(usable);
       const casters = [];
-      for (let i = 0; i < usable.length; i += 1) {
-        const subset = usable.filter((_, index) => index !== i);
+      for (let i = 0; i < source.length; i += 1) {
+        const subset = source.filter((_, index) => index !== i);
         if (subset.length >= MIN_FIT_POINTS) {
           casters.push(calculateCasterResult(subset, false).casterDeg);
         }
@@ -946,6 +1008,20 @@
         sigmaDeg,
         uncertainty95Deg: 1.96 * sigmaDeg
       };
+    }
+
+    function thinPointsForUncertainty(points) {
+      if (points.length <= MAX_UNCERTAINTY_POINTS) {
+        return points;
+      }
+
+      const thinned = [];
+      const last = points.length - 1;
+      for (let i = 0; i < MAX_UNCERTAINTY_POINTS; i += 1) {
+        const index = Math.round(i * last / (MAX_UNCERTAINTY_POINTS - 1));
+        thinned.push(points[index]);
+      }
+      return thinned;
     }
 
     /*
@@ -1134,7 +1210,8 @@
       if (state.baseline) {
         rows.push(pointRow(state.baseline, 0, true));
       }
-      state.points.forEach((point, index) => rows.push(pointRow(point, index + 1, false)));
+      const start = Math.max(0, state.points.length - MAX_RENDERED_POINT_ROWS);
+      state.points.slice(start).forEach((point, index) => rows.push(pointRow(point, start + index + 1, false)));
       els.pointRows.innerHTML = rows.join("");
     }
 
