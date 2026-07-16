@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Caster Gauge v0.4.8 - 2026-07-17</title>
+  <title>Caster Gauge v0.4.9 - 2026-07-17</title>
   <style>
     :root {
       --bg: #0b0f14;
@@ -343,7 +343,7 @@
 </head>
 <body>
   <header>
-    <h1>Caster Gauge v0.4.8</h1>
+    <h1>Caster Gauge v0.4.9</h1>
     <div class="sub">更新日: 2026-07-17</div>
     <div class="sub">重力ベクトルの平面フィットでステアリング軸を推定</div>
   </header>
@@ -359,12 +359,6 @@
       <button id="debugBtn" hidden>模擬データ</button>
     </section>
 
-    <section class="panel result top-result">
-      <div class="label">キャスター角</div>
-      <div class="value" id="caster">--</div>
-      <div class="status" id="signHint">表示は絶対値です</div>
-    </section>
-
     <div class="app-grid">
       <div>
         <section class="panel">
@@ -373,23 +367,18 @@
               <span class="label">次の操作</span>
               <div class="status" id="mountStatus">画面をホイール外側へ向けて立てます</div>
             </div>
-        <label class="check">
-          <input id="reverseForward" type="checkbox">
-          前方向を反転
-        </label>
-        <div class="field mount-field">
-          <span class="label">自動取得</span>
-          <label class="check">
-            <input type="radio" name="autoMode" id="autoModeStill" value="still">
-            静止時のみ
-          </label>
-          <label class="check">
-            <input type="radio" name="autoMode" id="autoModeAlways" value="always" checked>
-            常に1秒ごと
-          </label>
-        </div>
-      </div>
-    </section>
+            <label class="check">
+              <input id="reverseForward" type="checkbox">
+              前方向を反転
+            </label>
+          </div>
+        </section>
+
+        <section class="panel result top-result">
+          <div class="label">キャスター角</div>
+          <div class="value" id="caster">--</div>
+          <div class="status" id="signHint">表示は絶対値です</div>
+        </section>
 
         <section class="panel status-panel">
           <div class="status" id="status">センサー許可を押してください。iOS ではユーザー操作からの許可が必要です。</div>
@@ -477,7 +466,7 @@
     const MAX_MAG_STD = 0.12;
     const MIN_FIT_POINTS = 5;
     const AUTO_ADD_COOLDOWN_MS = 1000;
-    const AUTO_ADD_MIN_ANGLE_DEG = 0;
+    const AUTO_ADD_POINTS_PER_STILL_SESSION = 2;
     const MAX_MEASUREMENT_POINTS = 40;
     const MAX_UNCERTAINTY_POINTS = 32;
     const MAX_RENDERED_POINT_ROWS = 40;
@@ -497,7 +486,8 @@
       sensorReady: false,
       autoAddEnabled: false,
       baselinePending: false,
-      autoAddRequiresStillness: false,
+      wasStill: false,
+      stillSessionPointCount: 0,
       lastAutoAddAt: 0,
       screenOutNormal: v(0, 0, 1),
       audioContext: null,
@@ -523,8 +513,6 @@
       signHint: document.getElementById("signHint"),
       mountStatus: document.getElementById("mountStatus"),
       reverseForward: document.getElementById("reverseForward"),
-      autoModeStill: document.getElementById("autoModeStill"),
-      autoModeAlways: document.getElementById("autoModeAlways"),
       permissionBtn: document.getElementById("permissionBtn"),
       baselineBtn: document.getElementById("baselineBtn"),
       sampleBtn: document.getElementById("sampleBtn"),
@@ -761,32 +749,6 @@
       };
     }
 
-    function summarizeSamplesLoose(samples) {
-      const summary = summarizeSamples(samples);
-      if (summary.rawMean && summary.normalized) {
-        return summary;
-      }
-
-      if (samples.length === 0) {
-        return { ok: false, reason: "サンプルなし" };
-      }
-
-      const rawMean = scale(samples.reduce((acc, item) => add(acc, item.g), v(0, 0, 0)), 1 / samples.length);
-      const normalized = normalize(rawMean);
-      const mags = samples.map((item) => mag(item.g));
-      const axisStd = [0, 1, 2].map((axis) => std(samples.map((item) => item.g[axis])));
-      const magStd = std(mags);
-      return {
-        ok: false,
-        reason: summary.reason || "静止判定外",
-        rawMean,
-        normalized,
-        sampleCount: samples.length,
-        axisStd,
-        magStd
-      };
-    }
-
     function mean(values) {
       return values.reduce((sum, n) => sum + n, 0) / Math.max(values.length, 1);
     }
@@ -794,11 +756,6 @@
     function std(values) {
       const m = mean(values);
       return Math.sqrt(mean(values.map((n) => (n - m) ** 2)));
-    }
-
-    function vectorAngleDeg(a, b) {
-      const cos = Math.max(-1, Math.min(1, dot(normalize(a), normalize(b))));
-      return Math.acos(cos) * 180 / Math.PI;
     }
 
     function recordBaseline() {
@@ -829,6 +786,8 @@
       state.points = [];
       state.result = null;
       state.lastAutoAddAt = 0;
+      state.wasStill = false;
+      state.stillSessionPointCount = 0;
       playCaptureSound();
       setStatus("静止を検出して直進基準を記録しました。続けて測定点を自動追加します。");
       maybeAutoAddPoint(true);
@@ -925,26 +884,33 @@
       }
 
       const now = performance.now();
-      if (!force && now - state.lastAutoAddAt < AUTO_ADD_COOLDOWN_MS) {
+      const summary = summarizeSamples(state.recent);
+      if (!summary.ok) {
+        state.wasStill = false;
+        state.stillSessionPointCount = 0;
         return;
       }
 
-      const summary = state.autoAddRequiresStillness ? summarizeSamples(state.recent) : summarizeSamplesLoose(state.recent);
-      if (state.autoAddRequiresStillness && !summary.ok) {
+      if (!state.wasStill) {
+        state.wasStill = true;
+        state.stillSessionPointCount = 0;
+        state.lastAutoAddAt = 0;
+      }
+
+      if (state.stillSessionPointCount >= AUTO_ADD_POINTS_PER_STILL_SESSION) {
         return;
       }
 
-      const lastPoint = state.points[state.points.length - 1] || state.baseline;
-      const angleDeg = vectorAngleDeg(lastPoint.normalized, summary.normalized);
-      if (AUTO_ADD_MIN_ANGLE_DEG > 0 && angleDeg < AUTO_ADD_MIN_ANGLE_DEG) {
+      if (!force && state.stillSessionPointCount > 0 && now - state.lastAutoAddAt < AUTO_ADD_COOLDOWN_MS) {
         return;
       }
 
       const fitted = addPointFromSummary({
         ...summary,
-        excludedReason: summary.ok ? "" : summary.reason
+        excludedReason: ""
       }, `自動${state.points.length + 1}`);
       state.lastAutoAddAt = now;
+      state.stillSessionPointCount += 1;
       setStatus(fitted ? `静止を検出して測定点 ${state.points.length} を自動追加し、推定結果を更新しました。` : `静止を検出して測定点 ${state.points.length} を自動追加しました。`);
       render();
     }
@@ -1281,7 +1247,7 @@
         els.mountStatus.textContent = `準備完了。あと ${MIN_FIT_POINTS - state.points.length} 点で自動推定`;
         return;
       }
-      els.mountStatus.textContent = state.autoAddRequiresStillness ? "準備完了。揺れが収まると測定点を自動追加" : "実験モード。静止判定外でも1秒ごとに自動追加";
+      els.mountStatus.textContent = "準備完了。静止するたびに2点だけ自動追加";
     }
 
     function renderResult() {
@@ -1366,6 +1332,8 @@
       state.autoAddEnabled = false;
       state.baselinePending = false;
       state.lastAutoAddAt = 0;
+      state.wasStill = false;
+      state.stillSessionPointCount = 0;
       state.screenOutNormal = v(0, 0, 1);
       releaseWakeLock();
       setStatus("全測定点をクリアしました。");
@@ -1529,13 +1497,6 @@
     [els.reverseForward].forEach((el) => {
       el.addEventListener("change", () => {
         state.result = null;
-        render();
-      });
-    });
-    [els.autoModeStill, els.autoModeAlways].forEach((el) => {
-      el.addEventListener("change", () => {
-        state.autoAddRequiresStillness = els.autoModeStill.checked;
-        setStatus(state.autoAddRequiresStillness ? "自動取得: 静止時のみ" : "自動取得: 常に1秒ごと");
         render();
       });
     });

@@ -1,6 +1,6 @@
 # Measurement Algorithm
 
-- Version: v0.4.8
+- Version: v0.4.9
 - Updated: 2026-07-17
 
 ## Overview
@@ -41,7 +41,7 @@ The straight-ahead baseline records the gravity vector with the steering in the 
 
 The straight-ahead baseline vector is not included in the current implementation's plane-fit measurement point set. Plane fitting uses only the measurement points stored in `state.points`.
 
-The baseline button arms baseline capture instead of sampling immediately. Once the recent sensor window passes the stillness test, the app records the straight-ahead baseline automatically. Immediately after that successful baseline capture, the app attempts to add the first measurement point from the same still window, then continues adding points periodically while the phone remains still.
+The baseline button arms baseline capture instead of sampling immediately. Once the recent sensor window passes the stillness test, the app records the straight-ahead baseline automatically. Immediately after that successful baseline capture, the app attempts to add the first measurement point from the same still window. A still session then accepts at most two automatic measurement points.
 
 ## Measurement Points
 
@@ -51,18 +51,19 @@ Measurement points can be added manually or automatically. Automatic addition us
 
 - stillness over a sampling window
 - a cooldown time after the last automatic point
+- a maximum of two automatic points per still session
 
-When the phone remains still, the current implementation continues adding points at the cooldown interval. Duplicate or dense captures are handled by density weighting during fitting rather than by rejecting every nearby point.
+When the phone first becomes still, the current implementation adds the first point immediately and can add one more point after the cooldown interval if the phone remains still. It then stops for that still session. The still-session counter resets only after the phone leaves the stillness condition and later becomes still again. Duplicate or dense captures are also handled by density weighting during fitting.
 
-Current v0.4.1 capture thresholds are conservative again after field testing showed that permissive high-rate capture did not improve the displayed uncertainty enough and could overload mobile browsers:
+Current v0.4.9 capture thresholds are conservative after field testing showed that permissive high-rate capture did not improve the displayed uncertainty enough and could overload mobile browsers:
 
 - sample window: 1200 ms
 - minimum samples: 20
 - maximum per-axis standard deviation: 0.08
 - maximum magnitude standard deviation: 0.12
 - automatic-add cooldown: 1000 ms
-- minimum angular difference for automatic add: 0 degrees
-- automatic add requires stillness: user-selectable
+- automatic add requires stillness: yes
+- automatic points per still session: 2
 - retained measurement points: 40
 - points used for leave-one-out uncertainty: up to 32
 - rendered point rows: latest 40 plus baseline
