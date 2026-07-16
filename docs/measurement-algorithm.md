@@ -1,6 +1,6 @@
 # Measurement Algorithm
 
-- Version: v0.4.4
+- Version: v0.4.7
 - Updated: 2026-07-17
 
 ## Overview
@@ -62,6 +62,7 @@ Current v0.4.1 capture thresholds are conservative again after field testing sho
 - maximum magnitude standard deviation: 0.12
 - automatic-add cooldown: 1000 ms
 - minimum angular difference for automatic add: 0 degrees
+- automatic add requires stillness: user-selectable
 - retained measurement points: 80
 - points used for leave-one-out uncertainty: up to 32
 - rendered point rows: latest 40 plus baseline
