@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Caster Gauge v0.3.0 - 2026-07-16</title>
+  <title>Caster Gauge v0.4.0 - 2026-07-16</title>
   <style>
     :root {
       --bg: #0b0f14;
@@ -345,7 +345,7 @@
 </head>
 <body>
   <header>
-    <h1>Caster Gauge v0.3.0</h1>
+    <h1>Caster Gauge v0.4.0</h1>
     <div class="sub">更新日: 2026-07-16</div>
     <div class="sub">重力ベクトルの平面フィットでステアリング軸を推定</div>
   </header>
@@ -469,12 +469,12 @@
   </main>
 
   <script>
-    const SAMPLE_DURATION_MS = 1200;
-    const MIN_SAMPLE_COUNT = 20;
-    const MAX_AXIS_STD = 0.08;
-    const MAX_MAG_STD = 0.12;
+    const SAMPLE_DURATION_MS = 900;
+    const MIN_SAMPLE_COUNT = 12;
+    const MAX_AXIS_STD = 0.12;
+    const MAX_MAG_STD = 0.16;
     const MIN_FIT_POINTS = 5;
-    const AUTO_ADD_COOLDOWN_MS = 1800;
+    const AUTO_ADD_COOLDOWN_MS = 900;
     const AUTO_ADD_MIN_ANGLE_DEG = 0;
     const DENSITY_WEIGHT_BAND_DEG = 4;
     const GOOD_RMS_RESIDUAL = 0.035;

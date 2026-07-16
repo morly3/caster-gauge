@@ -1,6 +1,6 @@
 # Measurement Algorithm
 
-- Version: v0.3.0
+- Version: v0.4.0
 - Updated: 2026-07-16
 
 ## Overview
@@ -51,6 +51,14 @@ Measurement points can be added manually or automatically. Automatic addition us
 - a cooldown time after the last automatic point
 
 When the phone remains still, the current implementation continues adding points at the cooldown interval. Duplicate or dense captures are handled by density weighting during fitting rather than by rejecting every nearby point.
+
+Current v0.4.0 capture thresholds are intentionally a little permissive for field testing:
+
+- sample window: 900 ms
+- minimum samples: 12
+- maximum per-axis standard deviation: 0.12
+- maximum magnitude standard deviation: 0.16
+- automatic-add cooldown: 900 ms
 
 The steering angle in degrees is not acquired, calculated, or used as an input.
 
