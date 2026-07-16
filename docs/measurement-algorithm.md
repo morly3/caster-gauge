@@ -1,6 +1,6 @@
 # Measurement Algorithm
 
-- Version: v0.2.0
+- Version: v0.3.0
 - Updated: 2026-07-16
 
 ## Overview
@@ -31,7 +31,7 @@ The caster calculation does not use `DeviceOrientation` heading values, integrat
 
 ## Calibration
 
-The "screen facing up" calibration records which phone-axis direction corresponds to the outward-facing screen side. During measurement, the phone is assumed to be mounted upright with the screen facing outward from the wheel.
+The phone is assumed to be mounted upright with the screen facing outward from the wheel. The current implementation treats the phone's screen-out direction as the vehicle-outward direction.
 
 The straight-ahead baseline records the gravity vector with the steering in the straight-ahead position. This baseline is used to construct vehicle reference directions in phone coordinates:
 
@@ -48,10 +48,9 @@ The wheel is moved through multiple steering positions. At each position, the ve
 Measurement points can be added manually or automatically. Automatic addition uses:
 
 - stillness over a sampling window
-- a minimum angular difference from the previous measurement point
 - a cooldown time after the last automatic point
 
-These checks reduce duplicate captures from nearly the same phone attitude.
+When the phone remains still, the current implementation continues adding points at the cooldown interval. Duplicate or dense captures are handled by density weighting during fitting rather than by rejecting every nearby point.
 
 The steering angle in degrees is not acquired, calculated, or used as an input.
 
@@ -61,17 +60,18 @@ The app treats the normalized gravity vectors as points in 3D space.
 
 1. Compute the point-cloud mean.
 2. Subtract the mean from each point.
-3. Accumulate a 3x3 covariance matrix from those centered vectors.
-4. Perform eigendecomposition of the symmetric covariance matrix.
-5. Select the eigenvector corresponding to the smallest eigenvalue.
+3. Compute angular-density weights. Points with many nearby neighbors receive lower relative weight, while points in sparse steering regions receive higher relative weight.
+4. Accumulate a weighted 3x3 covariance matrix from those centered vectors.
+5. Perform eigendecomposition of the symmetric covariance matrix.
+6. Select the eigenvector corresponding to the smallest eigenvalue.
 
-That eigenvector is the normal of the least-squares plane fitted to the measured gravity-vector points. The app uses this plane normal as the estimated steering-axis direction.
+That eigenvector is the normal of the weighted least-squares plane fitted to the measured gravity-vector points. The app uses this plane normal as the estimated steering-axis direction.
 
 This implementation does not construct a virtual 3D coordinate point on the wheel axis for the straight-ahead position or for two steered positions. It also does not compute a plane through exactly three virtual points. It fits a plane statistically to five or more measured gravity vectors.
 
 ## Caster And SAI-Like Values
 
-From the screen-up calibration and straight-ahead baseline, the app constructs vehicle reference directions in phone coordinates:
+From the fixed screen-out mounting assumption and straight-ahead baseline, the app constructs vehicle reference directions in phone coordinates:
 
 - `verticalUp`
 - `lateral`
@@ -99,6 +99,17 @@ saiRad = Math.atan2(
 
 Positive caster is displayed as the direction where the upper end of the steering axis leans toward the rear of the vehicle, according to the current vehicle-forward sign setting.
 
+## Fit Quality And Uncertainty
+
+The app displays weighted RMS residual, quality text, and caster uncertainty. Caster uncertainty is estimated by leave-one-out recalculation:
+
+1. Remove one measurement point.
+2. Recalculate the weighted plane fit and caster angle.
+3. Repeat for every measurement point.
+4. Compute the standard deviation of those caster angles.
+
+The displayed `σ` is that standard deviation in degrees. The displayed `±` value is approximately `1.96 * σ`, used as a rough 95% variation range. This value is an empirical fit-stability indicator, not a formal metrology certificate.
+
 ## Not Used
 
 The current implementation does not use:
@@ -110,5 +121,4 @@ The current implementation does not use:
 - virtual 3D points constructed on the wheel axis
 - a plane defined only by three virtual coordinate points
 
-Instead, the steering axis is estimated directly by least-squares plane fitting of multiple measured gravity vectors.
-
+Instead, the steering axis is estimated directly by density-weighted least-squares plane fitting of multiple measured gravity vectors.

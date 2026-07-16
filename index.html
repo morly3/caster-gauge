@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Caster Gauge v0.2.0 - 2026-07-16</title>
+  <title>Caster Gauge v0.3.0 - 2026-07-16</title>
   <style>
     :root {
       --bg: #0b0f14;
@@ -239,7 +239,7 @@
     }
 
     .secondary-results {
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
     }
 
     .settings .mount-field {
@@ -287,7 +287,7 @@
       }
 
       .secondary-results {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(4, 1fr);
       }
 
       .settings {
@@ -345,7 +345,7 @@
 </head>
 <body>
   <header>
-    <h1>Caster Gauge v0.2.0</h1>
+    <h1>Caster Gauge v0.3.0</h1>
     <div class="sub">更新日: 2026-07-16</div>
     <div class="sub">重力ベクトルの平面フィットでステアリング軸を推定</div>
   </header>
@@ -361,8 +361,7 @@
       <div>
         <section class="toolbar">
           <button id="permissionBtn" class="primary primary-action">1 センサー許可</button>
-          <button id="screenUpBtn" class="primary-action">2 画面上向きを記録</button>
-          <button id="baselineBtn" class="primary-action">3 直進基準を記録</button>
+          <button id="baselineBtn" class="primary-action">2 直進基準を記録</button>
           <button id="sampleBtn">手動で点追加</button>
           <button id="csvBtn">CSV</button>
           <button id="removeBtn">最後を削除</button>
@@ -406,8 +405,12 @@
             <div class="value" id="rms">--</div>
           </div>
           <div class="panel metric">
-            <div class="label">品質</div>
+            <div class="label">安定度</div>
             <div class="value" id="quality">--</div>
+          </div>
+          <div class="panel metric">
+            <div class="label">σ / 95%幅</div>
+            <div class="value" id="uncertainty">--</div>
           </div>
         </section>
 
@@ -472,9 +475,12 @@
     const MAX_MAG_STD = 0.12;
     const MIN_FIT_POINTS = 5;
     const AUTO_ADD_COOLDOWN_MS = 1800;
-    const AUTO_ADD_MIN_ANGLE_DEG = 3;
+    const AUTO_ADD_MIN_ANGLE_DEG = 0;
+    const DENSITY_WEIGHT_BAND_DEG = 4;
     const GOOD_RMS_RESIDUAL = 0.035;
     const WARN_RMS_RESIDUAL = 0.075;
+    const GOOD_SIGMA_DEG = 0.25;
+    const WARN_SIGMA_DEG = 0.75;
     const MIN_SPREAD_RATIO = 4;
 
     const state = {
@@ -486,7 +492,7 @@
       sensorReady: false,
       autoAddEnabled: false,
       lastAutoAddAt: 0,
-      screenOutNormal: null,
+      screenOutNormal: v(0, 0, 1),
       audioContext: null,
       debug: new URLSearchParams(location.search).get("debug") === "1"
     };
@@ -502,6 +508,7 @@
       sai: document.getElementById("sai"),
       rms: document.getElementById("rms"),
       quality: document.getElementById("quality"),
+      uncertainty: document.getElementById("uncertainty"),
       pointCount: document.getElementById("pointCount"),
       status: document.getElementById("status"),
       pointRows: document.getElementById("pointRows"),
@@ -510,7 +517,6 @@
       sideSelect: document.getElementById("sideSelect"),
       reverseForward: document.getElementById("reverseForward"),
       permissionBtn: document.getElementById("permissionBtn"),
-      screenUpBtn: document.getElementById("screenUpBtn"),
       baselineBtn: document.getElementById("baselineBtn"),
       sampleBtn: document.getElementById("sampleBtn"),
       removeBtn: document.getElementById("removeBtn"),
@@ -603,35 +609,9 @@
       osc.stop(now + 0.14);
     }
 
-    function getAxisVector(name) {
-      const map = {
-        "x+": v(1, 0, 0),
-        "x-": v(-1, 0, 0),
-        "y+": v(0, 1, 0),
-        "y-": v(0, -1, 0),
-        "z+": v(0, 0, 1),
-        "z-": v(0, 0, -1)
-      };
-      return map[name] || map["z-"];
-    }
-
-    function nearestSignedAxis(vec) {
-      const axes = [v(1, 0, 0), v(0, 1, 0), v(0, 0, 1)];
-      let best = axes[0];
-      let bestAbs = -1;
-      for (const axis of axes) {
-        const d = dot(vec, axis);
-        if (Math.abs(d) > bestAbs) {
-          bestAbs = Math.abs(d);
-          best = scale(axis, Math.sign(d || 1));
-        }
-      }
-      return best;
-    }
-
     function getFrame() {
       const verticalUp = state.baseline ? scale(state.baseline.normalized, -1) : v(0, 0, -1);
-      const wheelNormalPhone = state.screenOutNormal || v(0, 0, 1);
+      const wheelNormalPhone = state.screenOutNormal;
       const lateralRaw = sub(wheelNormalPhone, scale(verticalUp, dot(wheelNormalPhone, verticalUp)));
       let lateral = normalize(lateralRaw);
 
@@ -662,7 +642,7 @@
       }
 
       // DeviceMotion の軸は端末座標系です。端末やブラウザで符号の扱いが違う場合があるため、
-      // DeviceMotion の符号は端末差があるため、画面上向きキャリブレーションで画面側の向きを決めます。
+      // 測定時は画面側をホイール外側へ向ける前提で、画面外向き(+Z)を車両外側として扱います。
       const sample = v(clampFinite(g.x), clampFinite(g.y), clampFinite(g.z));
       state.latestGravity = sample;
       state.sensorReady = true;
@@ -693,7 +673,7 @@
         }
 
         window.addEventListener("devicemotion", onMotion, { passive: true });
-        setStatus("スマホを水平な場所に置き、画面を上へ向けて「画面上向きを記録」を押してください。");
+        setStatus("画面をホイール外側へ向けて固定し、直進基準を記録してください。");
       } catch (err) {
         setStatus(`センサー許可に失敗しました: ${err.message}`, "danger");
       }
@@ -748,32 +728,12 @@
       return Math.acos(cos) * 180 / Math.PI;
     }
 
-    function recordScreenUp() {
-      const summary = summarizeSamples(state.recent);
-      if (!summary.ok) {
-        setStatus(`画面上向きを記録できません: ${summary.reason}`, "warn");
-        return;
-      }
-
-      // 画面を上へ向けたとき、画面側は物理的な上方向です。
-      // accelerationIncludingGravity は重力方向として入るため、既存の上下定義に合わせて反転します。
-      state.screenOutNormal = nearestSignedAxis(scale(summary.normalized, -1));
-      state.result = null;
-      setStatus("画面上向きを記録しました。次に画面をホイール外側へ向けて立て、直進基準を記録してください。");
-      render();
-    }
-
     function recordBaseline() {
       const summary = summarizeSamples(state.recent);
       if (!summary.ok) {
         setStatus(`直進基準を記録できません: ${summary.reason}`, "warn");
         return;
       }
-      if (!state.screenOutNormal) {
-        setStatus("先にスマホを水平に置き、画面上向きを記録してください。", "warn");
-        return;
-      }
-
       state.baseline = {
         ...summary,
         pointType: "直進基準",
@@ -827,7 +787,7 @@
 
       const lastPoint = state.points[state.points.length - 1] || state.baseline;
       const angleDeg = vectorAngleDeg(lastPoint.normalized, summary.normalized);
-      if (angleDeg < AUTO_ADD_MIN_ANGLE_DEG) {
+      if (AUTO_ADD_MIN_ANGLE_DEG > 0 && angleDeg < AUTO_ADD_MIN_ANGLE_DEG) {
         return;
       }
 
@@ -860,10 +820,16 @@
      * phone coordinate system and is used to decompose the estimated axis into
      * vertical, lateral, and forward components. The baseline sample itself is
      * not included in the plane-fit point set below.
+     *
+     * Points are density-weighted before fitting so that many samples captured
+     * at nearly the same attitude do not dominate sparse steering regions.
+     * Caster uncertainty is estimated from leave-one-out variation of the
+     * weighted fit and displayed as sigma and an approximate 95% range.
      */
-    function calculateCasterResult(usable) {
+    function calculateCasterResult(usable, includeUncertainty = true) {
       const vectors = usable.map((point) => point.normalized);
-      const fit = fitPlane(vectors);
+      const weights = computeDensityWeights(vectors);
+      const fit = fitPlane(vectors, weights);
       let axis = fit.axis;
       const frame = getFrame();
 
@@ -871,14 +837,17 @@
         axis = scale(axis, -1);
       }
 
-      const c = mean(vectors.map((g) => dot(axis, g)));
+      const projections = vectors.map((g) => dot(axis, g));
+      const c = weightedMean(projections, weights);
       const residuals = vectors.map((g) => Math.abs(dot(axis, g) - c));
-      const rmsResidual = Math.sqrt(mean(residuals.map((r) => r * r)));
+      const rmsResidual = weightedRms(residuals, weights);
       const maxResidual = Math.max(...residuals);
       const casterDeg = Math.atan2(dot(axis, frame.forward), dot(axis, frame.verticalUp)) * 180 / Math.PI;
       const saiDeg = Math.atan2(dot(axis, frame.lateral), dot(axis, frame.verticalUp)) * 180 / Math.PI;
       const spreadRatio = fit.eigenvalues[2] / Math.max(fit.eigenvalues[1], 1e-9);
-      const quality = judgeQuality(rmsResidual, usable.length, spreadRatio);
+      const uncertainty = includeUncertainty ? estimateCasterUncertainty(usable) : null;
+      const sigmaDeg = uncertainty ? uncertainty.sigmaDeg : NaN;
+      const quality = judgeQuality(rmsResidual, usable.length, spreadRatio, sigmaDeg);
 
       return {
         casterDeg,
@@ -893,32 +862,116 @@
         forward: frame.forward,
         quality,
         spreadRatio,
-        pointCount: usable.length
+        pointCount: usable.length,
+        weights,
+        effectivePointCount: effectiveCount(weights),
+        sigmaDeg,
+        uncertainty95Deg: uncertainty ? uncertainty.uncertainty95Deg : NaN
+      };
+    }
+
+    function computeDensityWeights(points) {
+      if (points.length === 0) {
+        return [];
+      }
+
+      const band = DENSITY_WEIGHT_BAND_DEG * Math.PI / 180;
+      const raw = points.map((point, index) => {
+        let density = 0;
+        for (let i = 0; i < points.length; i += 1) {
+          const angle = vectorAngleRad(point, points[i]);
+          density += Math.exp(-((angle / band) ** 2));
+        }
+        return 1 / Math.max(density, 1e-9);
+      });
+      const avg = mean(raw);
+      return raw.map((w) => w / Math.max(avg, 1e-9));
+    }
+
+    function vectorAngleRad(a, b) {
+      const cos = Math.max(-1, Math.min(1, dot(normalize(a), normalize(b))));
+      return Math.acos(cos);
+    }
+
+    function weightedMeanVec(points, weights) {
+      const total = weights.reduce((sum, w) => sum + w, 0);
+      if (total <= 1e-9) {
+        return scale(points.reduce((acc, p) => add(acc, p), v(0, 0, 0)), 1 / points.length);
+      }
+      return scale(points.reduce((acc, p, i) => add(acc, scale(p, weights[i])), v(0, 0, 0)), 1 / total);
+    }
+
+    function weightedRms(values, weights) {
+      const total = weights.reduce((sum, w) => sum + w, 0);
+      if (total <= 1e-9) {
+        return Math.sqrt(mean(values.map((r) => r * r)));
+      }
+      const sum = values.reduce((acc, r, i) => acc + weights[i] * r * r, 0);
+      return Math.sqrt(sum / total);
+    }
+
+    function weightedMean(values, weights) {
+      const total = weights.reduce((sum, w) => sum + w, 0);
+      if (total <= 1e-9) {
+        return mean(values);
+      }
+      return values.reduce((acc, value, i) => acc + value * weights[i], 0) / total;
+    }
+
+    function effectiveCount(weights) {
+      const sum = weights.reduce((acc, w) => acc + w, 0);
+      const sumSq = weights.reduce((acc, w) => acc + w * w, 0);
+      return sumSq > 1e-9 ? (sum * sum) / sumSq : 0;
+    }
+
+    function estimateCasterUncertainty(usable) {
+      if (usable.length <= MIN_FIT_POINTS) {
+        return null;
+      }
+
+      const casters = [];
+      for (let i = 0; i < usable.length; i += 1) {
+        const subset = usable.filter((_, index) => index !== i);
+        if (subset.length >= MIN_FIT_POINTS) {
+          casters.push(calculateCasterResult(subset, false).casterDeg);
+        }
+      }
+
+      if (casters.length < 2) {
+        return null;
+      }
+
+      const sigmaDeg = std(casters);
+      return {
+        sigmaDeg,
+        uncertainty95Deg: 1.96 * sigmaDeg
       };
     }
 
     /*
-     * Least-squares plane fit for measured gravity-vector points.
+     * Weighted least-squares plane fit for measured gravity-vector points.
      *
      * The point cloud is centered, a 3x3 covariance matrix is accumulated from
-     * the centered vectors, and symmetric eigendecomposition is applied. The
-     * eigenvector corresponding to the smallest eigenvalue is the normal of the
-     * least-squares plane and is treated as the estimated steering-axis
-     * direction.
+     * the weighted centered vectors, and symmetric eigendecomposition is
+     * applied. The eigenvector corresponding to the smallest eigenvalue is the
+     * normal of the least-squares plane and is treated as the estimated
+     * steering-axis direction.
      */
-    function fitPlane(points) {
-      const center = scale(points.reduce((acc, p) => add(acc, p), v(0, 0, 0)), 1 / points.length);
+    function fitPlane(points, weights = points.map(() => 1)) {
+      const center = weightedMeanVec(points, weights);
       const c = [
         [0, 0, 0],
         [0, 0, 0],
         [0, 0, 0]
       ];
 
-      for (const p of points) {
+      for (let i = 0; i < points.length; i += 1) {
+        const p = points[i];
+        const w = weights[i] || 0;
         const d = sub(p, center);
         for (let r = 0; r < 3; r += 1) {
           for (let col = 0; col < 3; col += 1) {
-            c[r][col] += d[r] * d[col];
+            c[r][col] += w * d[r] * d[col];
           }
         }
       }
@@ -993,17 +1046,20 @@
       };
     }
 
-    function judgeQuality(rmsResidual, pointCount, spreadRatio) {
+    function judgeQuality(rmsResidual, pointCount, spreadRatio, sigmaDeg) {
       if (pointCount < 7) {
         return "点数不足";
       }
       if (spreadRatio < MIN_SPREAD_RATIO) {
         return "転舵範囲不足";
       }
+      if (Number.isFinite(sigmaDeg) && sigmaDeg > WARN_SIGMA_DEG) {
+        return "推定ばらつき大";
+      }
       if (rmsResidual <= GOOD_RMS_RESIDUAL) {
         return "良好";
       }
-      if (rmsResidual <= WARN_RMS_RESIDUAL) {
+      if (rmsResidual <= WARN_RMS_RESIDUAL || (Number.isFinite(sigmaDeg) && sigmaDeg <= WARN_SIGMA_DEG)) {
         return "要確認";
       }
       return "揺れまたは固定不良";
@@ -1038,12 +1094,8 @@
     }
 
     function renderMountStatus() {
-      if (!state.screenOutNormal) {
-        els.mountStatus.textContent = "1. スマホを水平に置き、画面を上へ向けて記録";
-        return;
-      }
       if (!state.baseline) {
-        els.mountStatus.textContent = "2. 画面を外側へ向けて立て、直進基準を記録";
+        els.mountStatus.textContent = "1. 画面を外側へ向けて固定し、直進基準を記録";
         return;
       }
       if (state.points.length < MIN_FIT_POINTS) {
@@ -1058,8 +1110,23 @@
       els.caster.textContent = result ? fmtDeg(result.casterDeg) : "--";
       els.sai.textContent = result ? fmtDeg(result.saiDeg) : "--";
       els.rms.textContent = result ? fmt(result.rmsResidual, 4) : "--";
-      els.quality.textContent = result ? result.quality : "--";
-      els.quality.className = `value ${result && result.quality === "良好" ? "good" : ""}`;
+      els.quality.textContent = result ? stabilityLabel(result) : "--";
+      els.uncertainty.textContent = result && Number.isFinite(result.uncertainty95Deg) ? `σ${result.sigmaDeg.toFixed(2)} ±${result.uncertainty95Deg.toFixed(2)}°` : "--";
+      els.quality.className = `value ${result && stabilityLabel(result) === "安定" ? "good" : ""}`;
+      els.uncertainty.className = `value ${result && Number.isFinite(result.sigmaDeg) && result.sigmaDeg <= GOOD_SIGMA_DEG ? "good" : ""}`;
+    }
+
+    function stabilityLabel(result) {
+      if (!Number.isFinite(result.sigmaDeg)) {
+        return result.quality;
+      }
+      if (result.sigmaDeg <= GOOD_SIGMA_DEG && result.rmsResidual <= GOOD_RMS_RESIDUAL) {
+        return "安定";
+      }
+      if (result.sigmaDeg <= WARN_SIGMA_DEG && result.rmsResidual <= WARN_RMS_RESIDUAL) {
+        return "要確認";
+      }
+      return "不安定";
     }
 
     function renderTable() {
@@ -1106,6 +1173,7 @@
     function removeLastPoint() {
       state.points.pop();
       state.result = null;
+      updateFitIfReady();
       state.lastAutoAddAt = performance.now();
       setStatus("最後の測定点を削除しました。");
       render();
@@ -1117,7 +1185,7 @@
       state.result = null;
       state.autoAddEnabled = false;
       state.lastAutoAddAt = 0;
-      state.screenOutNormal = null;
+      state.screenOutNormal = v(0, 0, 1);
       setStatus("全測定点をクリアしました。");
       render();
     }
@@ -1181,6 +1249,10 @@
           "eigenvalue_0",
           "eigenvalue_1",
           "eigenvalue_2",
+          "effective_point_count",
+          "caster_sigma_deg",
+          "caster_uncertainty_95_deg",
+          "stability",
           "quality"
         ]));
         lines.push(csvRow([
@@ -1193,6 +1265,10 @@
           state.result.rmsResidual,
           state.result.maxResidual,
           ...state.result.eigenvalues,
+          state.result.effectivePointCount,
+          state.result.sigmaDeg,
+          state.result.uncertainty95Deg,
+          stabilityLabel(state.result),
           state.result.quality
         ]));
       }
@@ -1214,7 +1290,6 @@
     }
 
     function addDebugData() {
-      state.screenOutNormal = v(0, 0, 1);
       state.baseline = makePoint(v(0, 0, 9.81), "直進基準");
       state.points = [];
 
@@ -1255,11 +1330,10 @@
       };
     }
 
-    [els.permissionBtn, els.screenUpBtn, els.baselineBtn, els.sampleBtn, els.removeBtn, els.clearBtn, els.csvBtn, els.debugBtn].forEach((button) => {
+    [els.permissionBtn, els.baselineBtn, els.sampleBtn, els.removeBtn, els.clearBtn, els.csvBtn, els.debugBtn].forEach((button) => {
       button.addEventListener("click", ensureAudio);
     });
     els.permissionBtn.addEventListener("click", requestSensors);
-    els.screenUpBtn.addEventListener("click", recordScreenUp);
     els.baselineBtn.addEventListener("click", recordBaseline);
     els.sampleBtn.addEventListener("click", addPoint);
     els.removeBtn.addEventListener("click", removeLastPoint);
