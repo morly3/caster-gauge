@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Caster Gauge v0.4.7 - 2026-07-17</title>
+  <title>Caster Gauge v0.4.8 - 2026-07-17</title>
   <style>
     :root {
       --bg: #0b0f14;
@@ -345,7 +345,7 @@
 </head>
 <body>
   <header>
-    <h1>Caster Gauge v0.4.7</h1>
+    <h1>Caster Gauge v0.4.8</h1>
     <div class="sub">更新日: 2026-07-17</div>
     <div class="sub">重力ベクトルの平面フィットでステアリング軸を推定</div>
   </header>
@@ -354,14 +354,14 @@
     <section class="panel result top-result">
       <div class="label">キャスター角</div>
       <div class="value" id="caster">--</div>
-      <div class="status" id="signHint">正値: ステア軸上端が車両後方へ傾く設定</div>
+      <div class="status" id="signHint">表示は絶対値です</div>
     </section>
 
     <div class="app-grid">
       <div>
         <section class="toolbar">
           <button id="permissionBtn" class="primary primary-action">1 センサー許可</button>
-          <button id="baselineBtn" class="primary-action">2 直進基準を予約</button>
+          <button id="baselineBtn" class="primary-action">2 直進基準取得</button>
           <button id="sampleBtn">手動で点追加</button>
           <button id="csvBtn">CSV</button>
           <button id="removeBtn">最後を削除</button>
@@ -375,13 +375,6 @@
               <span class="label">次の操作</span>
               <div class="status" id="mountStatus">画面をホイール外側へ向けて立てます</div>
             </div>
-            <label class="field">
-              <span class="label">測定対象</span>
-              <select id="sideSelect">
-                <option value="left">左前輪</option>
-                <option value="right">右前輪</option>
-              </select>
-            </label>
         <label class="check">
           <input id="reverseForward" type="checkbox">
           前方向を反転
@@ -408,7 +401,7 @@
       <div>
         <section class="grid secondary-results">
           <div class="panel metric">
-            <div class="label">左右傾斜</div>
+            <div class="label">キングピン角相当</div>
             <div class="value" id="sai">--</div>
           </div>
           <div class="panel metric">
@@ -531,7 +524,6 @@
       pointRows: document.getElementById("pointRows"),
       signHint: document.getElementById("signHint"),
       mountStatus: document.getElementById("mountStatus"),
-      sideSelect: document.getElementById("sideSelect"),
       reverseForward: document.getElementById("reverseForward"),
       autoModeStill: document.getElementById("autoModeStill"),
       autoModeAlways: document.getElementById("autoModeAlways"),
@@ -620,7 +612,7 @@
       osc.frequency.setValueAtTime(880, now);
       osc.frequency.exponentialRampToValueAtTime(1320, now + 0.07);
       gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.45, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(1.0, now + 0.01);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
       osc.connect(gain);
       gain.connect(audio.destination);
@@ -676,10 +668,6 @@
         if (mag(lateral) < 1e-6) {
           lateral = normalize(cross(verticalUp, v(0, 1, 0)));
         }
-      }
-
-      if (els.sideSelect.value === "right") {
-        lateral = scale(lateral, -1);
       }
 
       let forward = normalize(cross(verticalUp, lateral));
@@ -1008,8 +996,10 @@
       const residuals = vectors.map((g) => Math.abs(dot(axis, g) - c));
       const rmsResidual = weightedRms(residuals, weights);
       const maxResidual = Math.max(...residuals);
-      const casterDeg = Math.atan2(dot(axis, frame.forward), dot(axis, frame.verticalUp)) * 180 / Math.PI;
-      const saiDeg = Math.atan2(dot(axis, frame.lateral), dot(axis, frame.verticalUp)) * 180 / Math.PI;
+      const casterSignedDeg = Math.atan2(dot(axis, frame.forward), dot(axis, frame.verticalUp)) * 180 / Math.PI;
+      const saiSignedDeg = Math.atan2(dot(axis, frame.lateral), dot(axis, frame.verticalUp)) * 180 / Math.PI;
+      const casterDeg = Math.abs(casterSignedDeg);
+      const saiDeg = Math.abs(saiSignedDeg);
       const spreadRatio = fit.eigenvalues[2] / Math.max(fit.eigenvalues[1], 1e-9);
       const uncertainty = includeUncertainty ? estimateCasterUncertainty(usable) : null;
       const sigmaDeg = uncertainty ? uncertainty.sigmaDeg : NaN;
@@ -1018,6 +1008,8 @@
       return {
         casterDeg,
         saiDeg,
+        casterSignedDeg,
+        saiSignedDeg,
         axis,
         c,
         rmsResidual,
@@ -1422,8 +1414,10 @@
       if (state.result) {
         lines.push("");
         lines.push(csvRow([
-          "caster_deg",
-          "sai_deg",
+          "caster_deg_abs",
+          "kingpin_angle_equiv_deg_abs",
+          "caster_deg_signed",
+          "kingpin_angle_equiv_deg_signed",
           "steering_axis_x",
           "steering_axis_y",
           "steering_axis_z",
@@ -1450,6 +1444,8 @@
         lines.push(csvRow([
           state.result.casterDeg,
           state.result.saiDeg,
+          state.result.casterSignedDeg,
+          state.result.saiSignedDeg,
           ...state.result.axis,
           ...state.result.verticalUp,
           ...state.result.lateral,
@@ -1532,7 +1528,7 @@
     els.clearBtn.addEventListener("click", clearPoints);
     els.csvBtn.addEventListener("click", exportCsv);
     els.debugBtn.addEventListener("click", addDebugData);
-    [els.sideSelect, els.reverseForward].forEach((el) => {
+    [els.reverseForward].forEach((el) => {
       el.addEventListener("change", () => {
         state.result = null;
         render();

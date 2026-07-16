@@ -1,13 +1,13 @@
 # Measurement Algorithm
 
-- Version: v0.4.7
+- Version: v0.4.8
 - Updated: 2026-07-17
 
 ## Overview
 
 Caster Gauge estimates the steering axis from gravity vectors measured by a smartphone fixed to an alignment gauge. The app treats normalized gravity vectors captured at multiple stationary steering positions as a point cloud in 3D phone coordinates, fits those points to a plane, and uses the plane normal as the estimated steering-axis direction.
 
-The app then decomposes the estimated axis into vehicle vertical, lateral, and forward components to calculate caster angle and an SAI-like lateral inclination value.
+The app then decomposes the estimated axis into vehicle vertical, lateral, and forward components to calculate absolute caster angle and an absolute SAI/KPI-like kingpin inclination reference value.
 
 ## Inputs
 
@@ -86,7 +86,7 @@ That eigenvector is the normal of the weighted least-squares plane fitted to the
 
 This implementation does not construct a virtual 3D coordinate point on the wheel axis for the straight-ahead position or for two steered positions. It also does not compute a plane through exactly three virtual points. It fits a plane statistically to five or more measured gravity vectors.
 
-## Caster And SAI-Like Values
+## Caster And SAI/KPI-Like Values
 
 From the fixed screen-out mounting assumption and straight-ahead baseline, the app constructs vehicle reference directions in phone coordinates:
 
@@ -96,7 +96,7 @@ From the fixed screen-out mounting assumption and straight-ahead baseline, the a
 
 The estimated steering axis is projected onto those directions.
 
-Caster angle is calculated from the steering-axis vertical and forward components:
+Caster angle is calculated from the steering-axis vertical and forward components, then displayed as an absolute value:
 
 ```js
 casterRad = Math.atan2(
@@ -105,7 +105,7 @@ casterRad = Math.atan2(
 );
 ```
 
-The SAI-like lateral inclination value is calculated from the steering-axis vertical and lateral components:
+The SAI/KPI-like kingpin inclination reference value is calculated from the steering-axis vertical and lateral components, then displayed as an absolute value:
 
 ```js
 saiRad = Math.atan2(
@@ -114,7 +114,7 @@ saiRad = Math.atan2(
 );
 ```
 
-Positive caster is displayed as the direction where the upper end of the steering axis leans toward the rear of the vehicle, according to the current vehicle-forward sign setting.
+Signed caster and kingpin-angle-equivalent values are kept in CSV for diagnostics, but the main UI displays absolute values to avoid left/right wheel sign handling in normal use.
 
 ## Fit Quality And Uncertainty
 
