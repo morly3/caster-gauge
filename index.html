@@ -257,6 +257,10 @@
       grid-column: 1 / -1;
     }
 
+    .settings .stillness-field {
+      grid-column: 1 / -1;
+    }
+
     .status-panel {
       min-height: 42px;
     }
@@ -373,13 +377,12 @@
               <span class="label">次の操作</span>
               <div class="status" id="mountStatus">画面をホイール外側へ向けて立てます</div>
             </div>
-            <label class="field">
+            <label class="field stillness-field">
               <span class="label">静止判定</span>
               <select id="stillnessLevel">
-                <option value="precision">精密（2秒）</option>
-                <option value="standard" selected>標準（1.2秒）</option>
-                <option value="vibrationLow">振動対応・弱（3秒）</option>
-                <option value="vibrationHigh">振動対応・強（5秒）</option>
+                <option value="standard" selected>標準（直近1.2秒を判定・平均）</option>
+                <option value="vibrationLow">振動対応・弱（直近3秒を判定・平均）</option>
+                <option value="vibrationHigh">振動対応・強（直近5秒を判定・平均）</option>
               </select>
             </label>
             <label class="check">
@@ -496,19 +499,6 @@
     const MIN_PLANE_SEPARATION_RATIO = 4;
     const DEBUG_MODE = new URLSearchParams(location.search).get("debug");
     const STILLNESS_PROFILES = Object.freeze({
-      precision: {
-        durationMs: 2000,
-        minSampleCount: 30,
-        maxAxisStd: 0.05,
-        maxMagStd: 0.08,
-        blockDurationMs: 250,
-        minBlockCount: 6,
-        maxBlockAngleRmsDeg: 0.08,
-        maxBlockDriftDeg: 0.12,
-        maxBlockMagStd: 0.035,
-        trimFraction: 0.10,
-        cooldownMs: 1000
-      },
       standard: {
         durationMs: 1200,
         minSampleCount: 20,

@@ -55,16 +55,17 @@ Captures can be added manually or automatically. Automatic addition uses:
 
 When the phone first becomes still, the current implementation adds the first capture immediately and can add one more capture after the cooldown interval if the phone remains still. It then stops for that still session. The still-session counter resets only after the phone leaves the stillness condition and later becomes still again. The two captures are averaged into one normalized session representative, so they improve the representative at that position without being counted as two independent steering positions.
 
-Version 0.5.1 provides four stillness profiles:
+Version 0.5.1 provides three stillness profiles:
 
-| Profile | Window | Min samples | Raw axis std | Raw magnitude std | Block | Block angle RMS | Direction drift | Block magnitude std | Trim | Cooldown |
+| Profile | Stillness/averaging window | Min samples | Raw axis std | Raw magnitude std | Block | Block angle RMS | Direction drift | Block magnitude std | Trim | Cooldown |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| precision | 2000 ms | 30 | 0.05 | 0.08 | 250 ms | 0.08 deg | 0.12 deg | 0.035 | 10% | 1000 ms |
 | standard | 1200 ms | 20 | 0.08 | 0.12 | 300 ms | 0.14 deg | 0.22 deg | 0.05 | 0% | 1000 ms |
 | vibration low | 3000 ms | 45 | 0.35 | 0.50 | 375 ms | 0.18 deg | 0.28 deg | 0.08 | 10% | 1500 ms |
 | vibration high | 5000 ms | 75 | 0.80 | 1.20 | 500 ms | 0.25 deg | 0.40 deg | 0.12 | 15% | 2500 ms |
 
 All profiles require at least 85% of the configured time span, automatic capture requires a passing stability result, and each still session accepts at most two captures. The app retains up to 40 raw captures, uses up to 32 sessions for jackknife uncertainty, and renders the latest 40 rows plus the baseline.
+
+The 1.2, 3, and 5 second values are rolling sensor-data window lengths. Each window is used both to decide whether the attitude is stable and to calculate the averaged gravity vector stored for that capture. They are not fixed delays added after a separate stillness decision. The second capture at one position uses the same rolling-window process after the profile-specific cooldown has elapsed.
 
 ### Vibration filtering
 
