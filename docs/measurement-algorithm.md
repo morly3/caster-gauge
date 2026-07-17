@@ -1,6 +1,6 @@
 # Measurement Algorithm
 
-- Version: v5.0.0
+- Version: v0.5.1
 - Updated: 2026-07-17
 
 ## Overview
@@ -25,7 +25,7 @@ event.accelerationIncludingGravity.y
 event.accelerationIncludingGravity.z
 ```
 
-The samples are averaged over a fixed duration, checked for stillness, and normalized into one gravity unit vector. That normalized vector is stored as one measurement point.
+The samples are retained in a rolling window whose duration depends on the selected stillness profile. They are block-averaged, checked for raw vibration and long-term attitude stability, robustly averaged when a vibration profile is active, and normalized into one gravity unit vector. That normalized vector is stored as one capture.
 
 The caster calculation does not use `DeviceOrientation` heading values, integrated gyro angles, steering angle, or camber angle as independent inputs.
 
@@ -55,18 +55,31 @@ Captures can be added manually or automatically. Automatic addition uses:
 
 When the phone first becomes still, the current implementation adds the first capture immediately and can add one more capture after the cooldown interval if the phone remains still. It then stops for that still session. The still-session counter resets only after the phone leaves the stillness condition and later becomes still again. The two captures are averaged into one normalized session representative, so they improve the representative at that position without being counted as two independent steering positions.
 
-Current v5.0.0 capture thresholds are conservative after field testing showed that permissive high-rate capture did not improve the displayed uncertainty enough and could overload mobile browsers:
+Version 0.5.1 provides four stillness profiles:
 
-- sample window: 1200 ms
-- minimum samples: 20
-- maximum per-axis standard deviation: 0.08
-- maximum magnitude standard deviation: 0.12
-- automatic-add cooldown: 1000 ms
-- automatic add requires stillness: yes
-- automatic captures per still session: 2
-- retained raw captures: 40
-- sessions used for jackknife uncertainty: up to 32
-- rendered point rows: latest 40 plus baseline
+| Profile | Window | Min samples | Raw axis std | Raw magnitude std | Block | Block angle RMS | Direction drift | Block magnitude std | Trim | Cooldown |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| precision | 2000 ms | 30 | 0.05 | 0.08 | 250 ms | 0.08 deg | 0.12 deg | 0.035 | 10% | 1000 ms |
+| standard | 1200 ms | 20 | 0.08 | 0.12 | 300 ms | 0.14 deg | 0.22 deg | 0.05 | 0% | 1000 ms |
+| vibration low | 3000 ms | 45 | 0.35 | 0.50 | 375 ms | 0.18 deg | 0.28 deg | 0.08 | 10% | 1500 ms |
+| vibration high | 5000 ms | 75 | 0.80 | 1.20 | 500 ms | 0.25 deg | 0.40 deg | 0.12 | 15% | 2500 ms |
+
+All profiles require at least 85% of the configured time span, automatic capture requires a passing stability result, and each still session accepts at most two captures. The app retains up to 40 raw captures, uses up to 32 sessions for jackknife uncertainty, and renders the latest 40 rows plus the baseline.
+
+### Vibration filtering
+
+The vibration profiles do not rely only on relaxed raw standard-deviation thresholds:
+
+1. Retain 3 or 5 seconds of rolling acceleration-including-gravity samples.
+2. Divide the window into 375 or 500 ms blocks and average each block independently.
+3. Compute a component-wise trimmed mean of the block vectors, then normalize it as the candidate gravity direction.
+4. Check raw per-axis and magnitude standard deviations as upper safety limits.
+5. Compute RMS angular deviation of the block directions from the candidate direction.
+6. Compare the mean direction of the first third of blocks with the last third to detect slow steering movement.
+7. Check the standard deviation of block-mean magnitudes.
+8. Accept the capture only when every applicable check passes.
+
+Periodic vibration with approximately zero mean is reduced by the block and multi-second averages. Slow attitude movement remains visible in the block-angle and first/last-direction checks. The filter cannot remove a vibration-induced sensor bias or mechanical movement whose time average changes with steering position.
 
 When the retained-capture limit is exceeded, the app first prefers captures from sessions that still contain another capture. The trim score then combines robust-plane residual, angular-density score, and age, so outliers, redundant captures, and over-represented dense regions are removed before sparse useful positions when possible.
 
@@ -129,7 +142,7 @@ The app displays robust weighted RMS residual, quality text, and caster uncertai
 - robust outlier count
 - jackknife standard error
 
-The previous maximum-eigenvalue / middle-eigenvalue test was removed. That ratio becomes large for a narrow arc and therefore cannot establish that the steering range is sufficient. Version 5.0.0 checks angular span directly and uses the middle/smallest eigenvalue separation to assess whether the plane normal is distinguishable from residual noise.
+The previous maximum-eigenvalue / middle-eigenvalue test was removed. That ratio becomes large for a narrow arc and therefore cannot establish that the steering range is sufficient. Version 0.5.0 checks angular span directly and uses the middle/smallest eigenvalue separation to assess whether the plane normal is distinguishable from residual noise.
 
 Caster uncertainty is estimated with a session-level delete-one jackknife:
 

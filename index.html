@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Caster Gauge v5.0.0 - 2026-07-17</title>
+  <title>Caster Gauge v0.5.1 - 2026-07-17</title>
   <style>
     :root {
       --bg: #0b0f14;
@@ -349,7 +349,7 @@
 </head>
 <body>
   <header>
-    <h1>Caster Gauge v5.0.0</h1>
+    <h1>Caster Gauge v0.5.1</h1>
     <div class="sub">更新日: 2026-07-17</div>
     <div class="sub">重力ベクトルの平面フィットでステアリング軸を推定</div>
   </header>
@@ -373,6 +373,15 @@
               <span class="label">次の操作</span>
               <div class="status" id="mountStatus">画面をホイール外側へ向けて立てます</div>
             </div>
+            <label class="field">
+              <span class="label">静止判定</span>
+              <select id="stillnessLevel">
+                <option value="precision">精密（2秒）</option>
+                <option value="standard" selected>標準（1.2秒）</option>
+                <option value="vibrationLow">振動対応・弱（3秒）</option>
+                <option value="vibrationHigh">振動対応・強（5秒）</option>
+              </select>
+            </label>
             <label class="check">
               <input id="reverseForward" type="checkbox">
               前方向を反転
@@ -467,12 +476,7 @@
   </main>
 
   <script>
-    const SAMPLE_DURATION_MS = 1200;
-    const MIN_SAMPLE_COUNT = 20;
-    const MAX_AXIS_STD = 0.08;
-    const MAX_MAG_STD = 0.12;
     const MIN_FIT_SESSIONS = 5;
-    const AUTO_ADD_COOLDOWN_MS = 1000;
     const AUTO_ADD_POINTS_PER_STILL_SESSION = 2;
     const MAX_MEASUREMENT_POINTS = 40;
     const MAX_UNCERTAINTY_SESSIONS = 32;
@@ -491,6 +495,60 @@
     const MIN_ANGULAR_SPAN_DEG = 3;
     const MIN_PLANE_SEPARATION_RATIO = 4;
     const DEBUG_MODE = new URLSearchParams(location.search).get("debug");
+    const STILLNESS_PROFILES = Object.freeze({
+      precision: {
+        durationMs: 2000,
+        minSampleCount: 30,
+        maxAxisStd: 0.05,
+        maxMagStd: 0.08,
+        blockDurationMs: 250,
+        minBlockCount: 6,
+        maxBlockAngleRmsDeg: 0.08,
+        maxBlockDriftDeg: 0.12,
+        maxBlockMagStd: 0.035,
+        trimFraction: 0.10,
+        cooldownMs: 1000
+      },
+      standard: {
+        durationMs: 1200,
+        minSampleCount: 20,
+        maxAxisStd: 0.08,
+        maxMagStd: 0.12,
+        blockDurationMs: 300,
+        minBlockCount: 3,
+        maxBlockAngleRmsDeg: 0.14,
+        maxBlockDriftDeg: 0.22,
+        maxBlockMagStd: 0.05,
+        trimFraction: 0,
+        cooldownMs: 1000
+      },
+      vibrationLow: {
+        durationMs: 3000,
+        minSampleCount: 45,
+        maxAxisStd: 0.35,
+        maxMagStd: 0.50,
+        blockDurationMs: 375,
+        minBlockCount: 6,
+        maxBlockAngleRmsDeg: 0.18,
+        maxBlockDriftDeg: 0.28,
+        maxBlockMagStd: 0.08,
+        trimFraction: 0.10,
+        cooldownMs: 1500
+      },
+      vibrationHigh: {
+        durationMs: 5000,
+        minSampleCount: 75,
+        maxAxisStd: 0.80,
+        maxMagStd: 1.20,
+        blockDurationMs: 500,
+        minBlockCount: 8,
+        maxBlockAngleRmsDeg: 0.25,
+        maxBlockDriftDeg: 0.40,
+        maxBlockMagStd: 0.12,
+        trimFraction: 0.15,
+        cooldownMs: 2500
+      }
+    });
 
     const state = {
       latestGravity: null,
@@ -506,10 +564,11 @@
       activeStillSessionId: null,
       nextSessionId: 1,
       lastAutoAddAt: 0,
+      stillnessLevel: "standard",
       screenOutNormal: v(0, 0, 1),
       audioContext: null,
       wakeLock: null,
-      debug: DEBUG_MODE === "1" || DEBUG_MODE === "auto" || DEBUG_MODE === "outlier"
+      debug: ["1", "auto", "outlier", "vibration"].includes(DEBUG_MODE)
     };
 
     const els = {
@@ -530,6 +589,7 @@
       signHint: document.getElementById("signHint"),
       mountStatus: document.getElementById("mountStatus"),
       reverseForward: document.getElementById("reverseForward"),
+      stillnessLevel: document.getElementById("stillnessLevel"),
       permissionBtn: document.getElementById("permissionBtn"),
       baselineBtn: document.getElementById("baselineBtn"),
       sampleBtn: document.getElementById("sampleBtn"),
@@ -693,8 +753,9 @@
       const sample = v(clampFinite(g.x), clampFinite(g.y), clampFinite(g.z));
       state.latestGravity = sample;
       state.sensorReady = true;
-      state.recent.push({ t: performance.now(), g: sample });
-      const cutoff = performance.now() - SAMPLE_DURATION_MS;
+      const now = performance.now();
+      state.recent.push({ t: now, g: sample });
+      const cutoff = now - getStillnessProfile().durationMs;
       state.recent = state.recent.filter((item) => item.t >= cutoff);
       renderLive();
       maybeRecordPendingBaseline();
@@ -731,39 +792,144 @@
       }
     }
 
+    function getStillnessProfile() {
+      return STILLNESS_PROFILES[state.stillnessLevel] || STILLNESS_PROFILES.standard;
+    }
+
+    /*
+     * Vibration-tolerant stillness estimation
+     *
+     * The rolling sensor window is divided into time blocks. Periodic motion
+     * is reduced inside each block, and the block means are robustly averaged.
+     * Raw vibration has a profile-specific safety limit, while angular scatter
+     * and first-to-last drift of the block means reject actual attitude change.
+     */
     function summarizeSamples(samples) {
-      if (samples.length < MIN_SAMPLE_COUNT) {
-        return { ok: false, reason: `サンプル不足 (${samples.length}/${MIN_SAMPLE_COUNT})` };
+      const profile = getStillnessProfile();
+      if (samples.length < profile.minSampleCount) {
+        return {
+          ok: false,
+          state: "collecting",
+          reason: `データ蓄積中 (${samples.length}/${profile.minSampleCount})`
+        };
       }
 
-      const rawMean = scale(samples.reduce((acc, item) => add(acc, item.g), v(0, 0, 0)), 1 / samples.length);
+      const sampleSpanMs = samples[samples.length - 1].t - samples[0].t;
+      if (sampleSpanMs < profile.durationMs * 0.85) {
+        return {
+          ok: false,
+          state: "collecting",
+          reason: `データ蓄積中 ${(sampleSpanMs / 1000).toFixed(1)}/${(profile.durationMs / 1000).toFixed(1)}秒`
+        };
+      }
+
+      const blockMeans = buildBlockMeans(samples, profile);
+      if (blockMeans.length < profile.minBlockCount) {
+        return {
+          ok: false,
+          state: "collecting",
+          reason: `平均ブロック蓄積中 (${blockMeans.length}/${profile.minBlockCount})`
+        };
+      }
+
+      const rawMean = trimmedMeanVector(blockMeans, profile.trimFraction);
       const normalized = normalize(rawMean);
       const mags = samples.map((item) => mag(item.g));
       const axisStd = [0, 1, 2].map((axis) => std(samples.map((item) => item.g[axis])));
       const magStd = std(mags);
       const maxAxisStd = Math.max(...axisStd);
+      const blockDirections = blockMeans.map((block) => normalize(block));
+      const blockAngleRmsDeg = Math.sqrt(mean(blockDirections.map((direction) => {
+        const angleDeg = vectorAngleRad(direction, normalized) * 180 / Math.PI;
+        return angleDeg * angleDeg;
+      })));
+      const edgeCount = Math.max(1, Math.floor(blockDirections.length / 3));
+      const firstDirection = normalize(meanVector(blockDirections.slice(0, edgeCount)));
+      const lastDirection = normalize(meanVector(blockDirections.slice(-edgeCount)));
+      const blockDriftDeg = vectorAngleRad(firstDirection, lastDirection) * 180 / Math.PI;
+      const blockMagStd = std(blockMeans.map((block) => mag(block)));
 
-      if (maxAxisStd > MAX_AXIS_STD || magStd > MAX_MAG_STD) {
+      const common = {
+        rawMean,
+        normalized,
+        sampleCount: samples.length,
+        sampleSpanMs,
+        axisStd,
+        magStd,
+        blockCount: blockMeans.length,
+        blockAngleRmsDeg,
+        blockDriftDeg,
+        blockMagStd,
+        stillnessLevel: state.stillnessLevel
+      };
+
+      if (maxAxisStd > profile.maxAxisStd || magStd > profile.maxMagStd) {
         return {
           ok: false,
-          reason: "車体の揺れが収まってから再測定してください",
-          rawMean,
-          normalized,
-          sampleCount: samples.length,
-          axisStd,
-          magStd
+          state: "moving",
+          reason: "振動が選択レベルの上限を超えています",
+          ...common
+        };
+      }
+
+      if (
+        blockAngleRmsDeg > profile.maxBlockAngleRmsDeg ||
+        blockDriftDeg > profile.maxBlockDriftDeg ||
+        blockMagStd > profile.maxBlockMagStd
+      ) {
+        return {
+          ok: false,
+          state: "moving",
+          reason: "平均姿勢が変化しています。ハンドルを止めてください",
+          ...common
         };
       }
 
       return {
         ok: true,
+        state: "stable",
         reason: "",
-        rawMean,
-        normalized,
-        sampleCount: samples.length,
-        axisStd,
-        magStd
+        ...common
       };
+    }
+
+    function buildBlockMeans(samples, profile) {
+      const endTime = samples[samples.length - 1].t;
+      const startTime = endTime - profile.durationMs;
+      const blockCount = Math.floor(profile.durationMs / profile.blockDurationMs);
+      const blocks = [];
+
+      for (let blockIndex = 0; blockIndex < blockCount; blockIndex += 1) {
+        const blockStart = startTime + blockIndex * profile.blockDurationMs;
+        const blockEnd = blockStart + profile.blockDurationMs;
+        const blockSamples = samples.filter((item) =>
+          item.t >= blockStart &&
+          (blockIndex === blockCount - 1 ? item.t <= blockEnd : item.t < blockEnd)
+        );
+        if (blockSamples.length >= 2) {
+          blocks.push(scale(
+            blockSamples.reduce((acc, item) => add(acc, item.g), v(0, 0, 0)),
+            1 / blockSamples.length
+          ));
+        }
+      }
+      return blocks;
+    }
+
+    function meanVector(points) {
+      return points.length > 0
+        ? scale(points.reduce((acc, point) => add(acc, point), v(0, 0, 0)), 1 / points.length)
+        : v(0, 0, 0);
+    }
+
+    function trimmedMeanVector(points, trimFraction) {
+      return [0, 1, 2].map((axis) => trimmedMean(points.map((point) => point[axis]), trimFraction));
+    }
+
+    function trimmedMean(values, trimFraction) {
+      const sorted = values.slice().sort((a, b) => a - b);
+      const trimCount = Math.min(Math.floor(sorted.length * trimFraction), Math.floor((sorted.length - 1) / 2));
+      return mean(sorted.slice(trimCount, sorted.length - trimCount));
     }
 
     function mean(values) {
@@ -801,7 +967,7 @@
     }
 
     function maybeRecordPendingBaseline() {
-      if (!state.baselinePending || state.recent.length < MIN_SAMPLE_COUNT) {
+      if (!state.baselinePending) {
         return;
       }
 
@@ -923,7 +1089,7 @@
     }
 
     function maybeAutoAddPoint(force = false) {
-      if (!state.autoAddEnabled || !state.baseline || state.recent.length < MIN_SAMPLE_COUNT) {
+      if (!state.autoAddEnabled || !state.baseline) {
         return;
       }
 
@@ -947,7 +1113,7 @@
         return;
       }
 
-      if (!force && state.stillSessionPointCount > 0 && now - state.lastAutoAddAt < AUTO_ADD_COOLDOWN_MS) {
+      if (!force && state.stillSessionPointCount > 0 && now - state.lastAutoAddAt < getStillnessProfile().cooldownMs) {
         return;
       }
 
@@ -1433,8 +1599,16 @@
       els.sensorState.textContent = "取得中";
 
       const summary = summarizeSamples(state.recent);
-      els.stillState.textContent = summary.ok ? "静止" : "揺れ";
-      els.stillState.className = `value ${summary.ok ? "good" : "bad"}`;
+      if (summary.ok) {
+        els.stillState.textContent = state.stillnessLevel.startsWith("vibration") ? "平均安定" : "静止";
+        els.stillState.className = "value good";
+      } else if (summary.state === "collecting") {
+        els.stillState.textContent = "蓄積中";
+        els.stillState.className = "value";
+      } else {
+        els.stillState.textContent = "揺れ";
+        els.stillState.className = "value bad";
+      }
     }
 
     function render() {
@@ -1450,7 +1624,7 @@
 
     function renderMountStatus() {
       if (state.baselinePending) {
-        els.mountStatus.textContent = "直進基準待ち。静止したら自動記録";
+        els.mountStatus.textContent = `直進基準待ち。${(getStillnessProfile().durationMs / 1000).toFixed(1)}秒安定したら自動記録`;
         return;
       }
       if (!state.baseline) {
@@ -1576,6 +1750,12 @@
         "std_y",
         "std_z",
         "std_magnitude",
+        "stillness_level",
+        "sample_span_ms",
+        "average_block_count",
+        "block_angle_rms_deg",
+        "block_drift_deg",
+        "block_magnitude_std",
         "used_for_fit",
         "fit_weight",
         "excluded_reason"
@@ -1599,6 +1779,12 @@
           point.sampleCount,
           ...point.axisStd,
           point.magStd,
+          point.stillnessLevel || "debug",
+          point.sampleSpanMs ?? "",
+          point.blockCount ?? "",
+          point.blockAngleRmsDeg ?? "",
+          point.blockDriftDeg ?? "",
+          point.blockMagStd ?? "",
           index === 0 && state.baseline ? "baseline" : point.usedForFit,
           sessionWeights.get(point.sessionId) ?? "",
           point.excludedReason || ""
@@ -1727,6 +1913,38 @@
       render();
     }
 
+    function runVibrationDebugTest() {
+      state.stillnessLevel = "vibrationHigh";
+      els.stillnessLevel.value = state.stillnessLevel;
+      const profile = getStillnessProfile();
+      const sampleCount = 301;
+      const startTime = performance.now() - profile.durationMs;
+      const makeSamples = (withDrift) => Array.from({ length: sampleCount }, (_, index) => {
+        const progress = index / (sampleCount - 1);
+        const seconds = progress * profile.durationMs / 1000;
+        const phase = 2 * Math.PI * 12 * seconds;
+        const tilt = withDrift ? progress * 2 * Math.PI / 180 : 0;
+        return {
+          t: startTime + progress * profile.durationMs,
+          g: v(
+            9.81 * Math.sin(tilt) + 0.45 * Math.sin(phase),
+            0.25 * Math.cos(phase * 1.5),
+            9.81 * Math.cos(tilt) + 0.35 * Math.sin(phase + 0.7)
+          )
+        };
+      });
+
+      const vibrationOnly = makeSamples(false);
+      const vibrationAndMovement = makeSamples(true);
+      const stableResult = summarizeSamples(vibrationOnly);
+      const movingResult = summarizeSamples(vibrationAndMovement);
+      state.recent = vibrationOnly;
+      state.latestGravity = vibrationOnly[vibrationOnly.length - 1].g;
+      state.sensorReady = true;
+      setStatus(`振動平均テスト: 振動のみ=${stableResult.ok ? "OK" : "NG"} / 2度移動=${movingResult.ok ? "誤受理" : "除外"}`);
+      render();
+    }
+
     function rotateAroundAxis(point, axis, angle) {
       return add(
         add(scale(point, Math.cos(angle)), scale(cross(axis, point), Math.sin(angle))),
@@ -1759,6 +1977,16 @@
     els.clearBtn.addEventListener("click", clearPoints);
     els.csvBtn.addEventListener("click", exportCsv);
     els.debugBtn.addEventListener("click", () => addDebugData(false));
+    els.stillnessLevel.addEventListener("change", () => {
+      state.stillnessLevel = els.stillnessLevel.value;
+      state.recent = [];
+      state.wasStill = false;
+      state.stillSessionPointCount = 0;
+      state.activeStillSessionId = null;
+      state.lastAutoAddAt = 0;
+      setStatus(`${els.stillnessLevel.selectedOptions[0].textContent}へ変更しました。新しい判定用データを蓄積します。`);
+      render();
+    });
     [els.reverseForward].forEach((el) => {
       el.addEventListener("change", () => {
         state.result = null;
@@ -1775,6 +2003,8 @@
     render();
     if (DEBUG_MODE === "auto" || DEBUG_MODE === "outlier") {
       addDebugData(DEBUG_MODE === "outlier");
+    } else if (DEBUG_MODE === "vibration") {
+      runVibrationDebugTest();
     }
   </script>
 </body>
