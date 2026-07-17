@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Caster Gauge v0.5.2 - 2026-07-17</title>
+  <title>Caster Gauge v0.5.3 - 2026-07-17</title>
   <style>
     :root {
       --bg: #0b0f14;
@@ -353,7 +353,7 @@
 </head>
 <body>
   <header>
-    <h1>Caster Gauge v0.5.2</h1>
+    <h1>Caster Gauge v0.5.3</h1>
     <div class="sub">更新日: 2026-07-17</div>
     <div class="sub">重力ベクトルの平面フィットでステアリング軸を推定</div>
   </header>
@@ -670,23 +670,52 @@
       }
 
       const now = audio.currentTime;
-      const osc = audio.createOscillator();
-      const gain = audio.createGain();
-      osc.type = "square";
-      osc.frequency.setValueAtTime(880, now);
-      osc.frequency.exponentialRampToValueAtTime(1320, now + 0.07);
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(1.6, now + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
-      osc.connect(gain);
-      gain.connect(audio.destination);
-      osc.start(now);
-      osc.stop(now + 0.16);
+      const duration = 0.26;
+      const mix = audio.createGain();
+      const envelope = audio.createGain();
+      const saturator = audio.createWaveShaper();
+      const output = audio.createGain();
+      const curve = new Float32Array(1024);
+
+      for (let index = 0; index < curve.length; index += 1) {
+        const x = index * 2 / (curve.length - 1) - 1;
+        curve[index] = Math.tanh(5 * x);
+      }
+      saturator.curve = curve;
+      saturator.oversample = "4x";
+
+      envelope.gain.setValueAtTime(0.0001, now);
+      envelope.gain.exponentialRampToValueAtTime(1.0, now + 0.008);
+      envelope.gain.setValueAtTime(1.0, now + 0.19);
+      envelope.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      output.gain.setValueAtTime(2.5, now);
+
+      mix.connect(envelope);
+      envelope.connect(saturator);
+      saturator.connect(output);
+      output.connect(audio.destination);
+
+      [
+        { frequency: 1050, level: 0.90, type: "square" },
+        { frequency: 1520, level: 0.70, type: "square" },
+        { frequency: 2100, level: 0.55, type: "sawtooth" }
+      ].forEach((tone) => {
+        const oscillator = audio.createOscillator();
+        const level = audio.createGain();
+        oscillator.type = tone.type;
+        oscillator.frequency.setValueAtTime(tone.frequency, now);
+        oscillator.frequency.exponentialRampToValueAtTime(tone.frequency * 1.08, now + 0.11);
+        level.gain.setValueAtTime(tone.level, now);
+        oscillator.connect(level);
+        level.connect(mix);
+        oscillator.start(now);
+        oscillator.stop(now + duration + 0.02);
+      });
     }
 
     function playStableSound() {
       playCaptureSound();
-      window.setTimeout(playCaptureSound, 120);
+      window.setTimeout(playCaptureSound, 310);
     }
 
     async function requestWakeLock() {

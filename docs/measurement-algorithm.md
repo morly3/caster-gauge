@@ -1,6 +1,6 @@
 # Measurement Algorithm
 
-- Version: v0.5.2
+- Version: v0.5.3
 - Updated: 2026-07-17
 
 ## Overview
@@ -55,7 +55,7 @@ Captures can be added manually or automatically. Automatic addition uses:
 
 When the phone first becomes still, the current implementation adds the first capture immediately and can add one more capture after the cooldown interval if the phone remains still. It then stops for that still session. The still-session counter resets only after the phone leaves the stillness condition and later becomes still again. The two captures are averaged into one normalized session representative, so they improve the representative at that position without being counted as two independent steering positions.
 
-Version 0.5.2 provides three stillness profiles:
+Version 0.5.3 provides three stillness profiles:
 
 | Profile | Stillness/averaging window | Min samples | Raw axis std | Raw magnitude std | Block | Block angle RMS | Direction drift | Block magnitude std | Trim | Cooldown |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
