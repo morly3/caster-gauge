@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Caster Gauge v0.5.1 - 2026-07-17</title>
+  <title>Caster Gauge v0.5.2 - 2026-07-17</title>
   <style>
     :root {
       --bg: #0b0f14;
@@ -353,7 +353,7 @@
 </head>
 <body>
   <header>
-    <h1>Caster Gauge v0.5.1</h1>
+    <h1>Caster Gauge v0.5.2</h1>
     <div class="sub">更新日: 2026-07-17</div>
     <div class="sub">重力ベクトルの平面フィットでステアリング軸を推定</div>
   </header>
@@ -384,6 +384,7 @@
                 <option value="vibrationLow">振動対応・弱（直近3秒を判定・平均）</option>
                 <option value="vibrationHigh">振動対応・強（直近5秒を判定・平均）</option>
               </select>
+              <span class="status" id="stillnessDetail">判定データ待ち</span>
             </label>
             <label class="check">
               <input id="reverseForward" type="checkbox">
@@ -502,41 +503,47 @@
       standard: {
         durationMs: 1200,
         minSampleCount: 20,
-        maxAxisStd: 0.08,
-        maxMagStd: 0.12,
+        maxAxisStd: 0.15,
+        maxMagStd: 0.20,
         blockDurationMs: 300,
         minBlockCount: 3,
-        maxBlockAngleRmsDeg: 0.14,
-        maxBlockDriftDeg: 0.22,
-        maxBlockMagStd: 0.05,
+        maxBlockAngleRmsDeg: 0.20,
+        maxBlockDriftDeg: 0.35,
+        maxBlockMagStd: 0.08,
         trimFraction: 0,
-        cooldownMs: 1000
+        cooldownMs: 1000,
+        rearmUnstableMs: 500,
+        rearmAngleDeg: 0.20
       },
       vibrationLow: {
         durationMs: 3000,
         minSampleCount: 45,
-        maxAxisStd: 0.35,
-        maxMagStd: 0.50,
-        blockDurationMs: 375,
-        minBlockCount: 6,
-        maxBlockAngleRmsDeg: 0.18,
-        maxBlockDriftDeg: 0.28,
-        maxBlockMagStd: 0.08,
+        maxAxisStd: 0.80,
+        maxMagStd: 1.20,
+        blockDurationMs: 500,
+        minBlockCount: 5,
+        maxBlockAngleRmsDeg: 0.45,
+        maxBlockDriftDeg: 0.55,
+        maxBlockMagStd: 0.25,
         trimFraction: 0.10,
-        cooldownMs: 1500
+        cooldownMs: 1500,
+        rearmUnstableMs: 750,
+        rearmAngleDeg: 0.30
       },
       vibrationHigh: {
         durationMs: 5000,
         minSampleCount: 75,
-        maxAxisStd: 0.80,
-        maxMagStd: 1.20,
-        blockDurationMs: 500,
-        minBlockCount: 8,
-        maxBlockAngleRmsDeg: 0.25,
-        maxBlockDriftDeg: 0.40,
-        maxBlockMagStd: 0.12,
-        trimFraction: 0.15,
-        cooldownMs: 2500
+        maxAxisStd: 2.00,
+        maxMagStd: 3.00,
+        blockDurationMs: 1000,
+        minBlockCount: 4,
+        maxBlockAngleRmsDeg: 1.00,
+        maxBlockDriftDeg: 0.80,
+        maxBlockMagStd: 0.50,
+        trimFraction: 0.20,
+        cooldownMs: 2500,
+        rearmUnstableMs: 1000,
+        rearmAngleDeg: 0.40
       }
     });
 
@@ -554,11 +561,14 @@
       activeStillSessionId: null,
       nextSessionId: 1,
       lastAutoAddAt: 0,
+      unstableSince: null,
+      lastCapturedDirection: null,
+      movementConfirmed: false,
       stillnessLevel: "standard",
       screenOutNormal: v(0, 0, 1),
       audioContext: null,
       wakeLock: null,
-      debug: ["1", "auto", "outlier", "vibration"].includes(DEBUG_MODE)
+      debug: ["1", "auto", "outlier", "vibration", "hysteresis"].includes(DEBUG_MODE)
     };
 
     const els = {
@@ -568,6 +578,7 @@
       gmag: document.getElementById("gmag"),
       sensorState: document.getElementById("sensorState"),
       stillState: document.getElementById("stillState"),
+      stillnessDetail: document.getElementById("stillnessDetail"),
       caster: document.getElementById("caster"),
       sai: document.getElementById("sai"),
       rms: document.getElementById("rms"),
@@ -747,9 +758,9 @@
       state.recent.push({ t: now, g: sample });
       const cutoff = now - getStillnessProfile().durationMs;
       state.recent = state.recent.filter((item) => item.t >= cutoff);
-      renderLive();
       maybeRecordPendingBaseline();
       maybeAutoAddPoint();
+      renderLive();
     }
 
     async function requestSensors() {
@@ -853,24 +864,47 @@
         stillnessLevel: state.stillnessLevel
       };
 
-      if (maxAxisStd > profile.maxAxisStd || magStd > profile.maxMagStd) {
+      if (maxAxisStd > profile.maxAxisStd) {
         return {
           ok: false,
           state: "moving",
-          reason: "振動が選択レベルの上限を超えています",
+          reason: `軸振動 ${maxAxisStd.toFixed(2)} > ${profile.maxAxisStd.toFixed(2)} m/s²`,
           ...common
         };
       }
 
-      if (
-        blockAngleRmsDeg > profile.maxBlockAngleRmsDeg ||
-        blockDriftDeg > profile.maxBlockDriftDeg ||
-        blockMagStd > profile.maxBlockMagStd
-      ) {
+      if (magStd > profile.maxMagStd) {
         return {
           ok: false,
           state: "moving",
-          reason: "平均姿勢が変化しています。ハンドルを止めてください",
+          reason: `合成振動 ${magStd.toFixed(2)} > ${profile.maxMagStd.toFixed(2)} m/s²`,
+          ...common
+        };
+      }
+
+      if (blockAngleRmsDeg > profile.maxBlockAngleRmsDeg) {
+        return {
+          ok: false,
+          state: "moving",
+          reason: `方向揺れ ${blockAngleRmsDeg.toFixed(2)} > ${profile.maxBlockAngleRmsDeg.toFixed(2)}°`,
+          ...common
+        };
+      }
+
+      if (blockDriftDeg > profile.maxBlockDriftDeg) {
+        return {
+          ok: false,
+          state: "moving",
+          reason: `姿勢移動 ${blockDriftDeg.toFixed(2)} > ${profile.maxBlockDriftDeg.toFixed(2)}°`,
+          ...common
+        };
+      }
+
+      if (blockMagStd > profile.maxBlockMagStd) {
+        return {
+          ok: false,
+          state: "moving",
+          reason: `平均G変動 ${blockMagStd.toFixed(2)} > ${profile.maxBlockMagStd.toFixed(2)} m/s²`,
           ...common
         };
       }
@@ -976,6 +1010,9 @@
       state.points = [];
       state.result = null;
       state.lastAutoAddAt = 0;
+      state.unstableSince = null;
+      state.lastCapturedDirection = null;
+      state.movementConfirmed = false;
       state.wasStill = false;
       state.stillSessionPointCount = 0;
       state.activeStillSessionId = null;
@@ -1078,6 +1115,28 @@
       return bestIndex;
     }
 
+    function updateMovementRearm(summary, now) {
+      if (summary.state !== "moving" || !summary.normalized || !state.lastCapturedDirection) {
+        return false;
+      }
+
+      if (state.unstableSince === null) {
+        state.unstableSince = now;
+      }
+
+      const profile = getStillnessProfile();
+      const movedAngleDeg = vectorAngleRad(summary.normalized, state.lastCapturedDirection) * 180 / Math.PI;
+      if (now - state.unstableSince < profile.rearmUnstableMs || movedAngleDeg < profile.rearmAngleDeg) {
+        return false;
+      }
+
+      state.wasStill = false;
+      state.stillSessionPointCount = 0;
+      state.activeStillSessionId = null;
+      state.movementConfirmed = true;
+      return true;
+    }
+
     function maybeAutoAddPoint(force = false) {
       if (!state.autoAddEnabled || !state.baseline) {
         return;
@@ -1086,10 +1145,20 @@
       const now = performance.now();
       const summary = summarizeSamples(state.recent);
       if (!summary.ok) {
-        state.wasStill = false;
-        state.stillSessionPointCount = 0;
-        state.activeStillSessionId = null;
+        updateMovementRearm(summary, now);
         return;
+      }
+
+      state.unstableSince = null;
+
+      if (!state.wasStill && state.movementConfirmed && state.lastCapturedDirection) {
+        const stableMoveDeg = vectorAngleRad(summary.normalized, state.lastCapturedDirection) * 180 / Math.PI;
+        if (stableMoveDeg < getStillnessProfile().rearmAngleDeg) {
+          state.wasStill = true;
+          state.stillSessionPointCount = AUTO_ADD_POINTS_PER_STILL_SESSION;
+          state.movementConfirmed = false;
+          return;
+        }
       }
 
       if (!state.wasStill) {
@@ -1097,6 +1166,7 @@
         state.stillSessionPointCount = 0;
         state.lastAutoAddAt = 0;
         state.activeStillSessionId = createSessionId();
+        state.movementConfirmed = false;
       }
 
       if (state.stillSessionPointCount >= AUTO_ADD_POINTS_PER_STILL_SESSION) {
@@ -1112,6 +1182,7 @@
         excludedReason: ""
       }, `自動${state.points.length + 1}`, state.activeStillSessionId);
       state.lastAutoAddAt = now;
+      state.lastCapturedDirection = summary.normalized.slice();
       state.stillSessionPointCount += 1;
       const sessionCount = buildSessionRepresentatives(state.points).length;
       setStatus(fitted
@@ -1592,12 +1663,19 @@
       if (summary.ok) {
         els.stillState.textContent = state.stillnessLevel.startsWith("vibration") ? "平均安定" : "静止";
         els.stillState.className = "value good";
+        els.stillnessDetail.textContent = `方向揺れ ${summary.blockAngleRmsDeg.toFixed(2)}°・姿勢移動 ${summary.blockDriftDeg.toFixed(2)}°`;
       } else if (summary.state === "collecting") {
         els.stillState.textContent = "蓄積中";
         els.stillState.className = "value";
+        els.stillnessDetail.textContent = summary.reason;
+      } else if (state.wasStill && !state.movementConfirmed) {
+        els.stillState.textContent = "保持中";
+        els.stillState.className = "value";
+        els.stillnessDetail.textContent = `${summary.reason}（同じ位置として保持）`;
       } else {
-        els.stillState.textContent = "揺れ";
+        els.stillState.textContent = state.movementConfirmed ? "移動" : "揺れ";
         els.stillState.className = "value bad";
+        els.stillnessDetail.textContent = summary.reason;
       }
     }
 
@@ -1700,6 +1778,9 @@
       state.points.pop();
       state.result = null;
       updateFitIfReady();
+      state.lastCapturedDirection = state.points.length > 0
+        ? state.points[state.points.length - 1].normalized.slice()
+        : null;
       state.lastAutoAddAt = performance.now();
       setStatus("最後の測定点を削除しました。");
       render();
@@ -1712,6 +1793,9 @@
       state.autoAddEnabled = false;
       state.baselinePending = false;
       state.lastAutoAddAt = 0;
+      state.unstableSince = null;
+      state.lastCapturedDirection = null;
+      state.movementConfirmed = false;
       state.wasStill = false;
       state.stillSessionPointCount = 0;
       state.activeStillSessionId = null;
@@ -1917,9 +2001,9 @@
         return {
           t: startTime + progress * profile.durationMs,
           g: v(
-            9.81 * Math.sin(tilt) + 0.45 * Math.sin(phase),
-            0.25 * Math.cos(phase * 1.5),
-            9.81 * Math.cos(tilt) + 0.35 * Math.sin(phase + 0.7)
+            9.81 * Math.sin(tilt) + 1.50 * Math.sin(phase),
+            0.80 * Math.cos(phase * 1.5),
+            9.81 * Math.cos(tilt) + 1.20 * Math.sin(phase + 0.7)
           )
         };
       });
@@ -1932,6 +2016,32 @@
       state.latestGravity = vibrationOnly[vibrationOnly.length - 1].g;
       state.sensorReady = true;
       setStatus(`振動平均テスト: 振動のみ=${stableResult.ok ? "OK" : "NG"} / 2度移動=${movingResult.ok ? "誤受理" : "除外"}`);
+      render();
+    }
+
+    function runHysteresisDebugTest() {
+      state.stillnessLevel = "standard";
+      els.stillnessLevel.value = state.stillnessLevel;
+      const makeDirection = (angleDeg) => {
+        const angle = angleDeg * Math.PI / 180;
+        return v(Math.sin(angle), 0, Math.cos(angle));
+      };
+      const testSummary = (angleDeg) => ({ state: "moving", normalized: makeDirection(angleDeg) });
+
+      state.wasStill = true;
+      state.lastCapturedDirection = makeDirection(0);
+      state.unstableSince = 0;
+      state.movementConfirmed = false;
+      const samePositionRearmed = updateMovementRearm(testSummary(0.05), 1000);
+
+      state.wasStill = true;
+      state.stillSessionPointCount = 2;
+      state.activeStillSessionId = "TEST";
+      state.unstableSince = 0;
+      state.movementConfirmed = false;
+      const movedPositionRearmed = updateMovementRearm(testSummary(0.50), 1000);
+
+      setStatus(`再アームテスト: 同位置=${samePositionRearmed ? "誤作動" : "保持"} / 0.5度移動=${movedPositionRearmed ? "再アーム" : "失敗"}`);
       render();
     }
 
@@ -1968,10 +2078,13 @@
     els.csvBtn.addEventListener("click", exportCsv);
     els.debugBtn.addEventListener("click", () => addDebugData(false));
     els.stillnessLevel.addEventListener("change", () => {
+      const keepCurrentPositionLocked = Boolean(state.lastCapturedDirection);
       state.stillnessLevel = els.stillnessLevel.value;
       state.recent = [];
-      state.wasStill = false;
-      state.stillSessionPointCount = 0;
+      state.unstableSince = null;
+      state.movementConfirmed = false;
+      state.wasStill = keepCurrentPositionLocked;
+      state.stillSessionPointCount = keepCurrentPositionLocked ? AUTO_ADD_POINTS_PER_STILL_SESSION : 0;
       state.activeStillSessionId = null;
       state.lastAutoAddAt = 0;
       setStatus(`${els.stillnessLevel.selectedOptions[0].textContent}へ変更しました。新しい判定用データを蓄積します。`);
@@ -1995,6 +2108,8 @@
       addDebugData(DEBUG_MODE === "outlier");
     } else if (DEBUG_MODE === "vibration") {
       runVibrationDebugTest();
+    } else if (DEBUG_MODE === "hysteresis") {
+      runHysteresisDebugTest();
     }
   </script>
 </body>

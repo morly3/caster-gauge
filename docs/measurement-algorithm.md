@@ -1,6 +1,6 @@
 # Measurement Algorithm
 
-- Version: v0.5.1
+- Version: v0.5.2
 - Updated: 2026-07-17
 
 ## Overview
@@ -55,24 +55,26 @@ Captures can be added manually or automatically. Automatic addition uses:
 
 When the phone first becomes still, the current implementation adds the first capture immediately and can add one more capture after the cooldown interval if the phone remains still. It then stops for that still session. The still-session counter resets only after the phone leaves the stillness condition and later becomes still again. The two captures are averaged into one normalized session representative, so they improve the representative at that position without being counted as two independent steering positions.
 
-Version 0.5.1 provides three stillness profiles:
+Version 0.5.2 provides three stillness profiles:
 
 | Profile | Stillness/averaging window | Min samples | Raw axis std | Raw magnitude std | Block | Block angle RMS | Direction drift | Block magnitude std | Trim | Cooldown |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| standard | 1200 ms | 20 | 0.08 | 0.12 | 300 ms | 0.14 deg | 0.22 deg | 0.05 | 0% | 1000 ms |
-| vibration low | 3000 ms | 45 | 0.35 | 0.50 | 375 ms | 0.18 deg | 0.28 deg | 0.08 | 10% | 1500 ms |
-| vibration high | 5000 ms | 75 | 0.80 | 1.20 | 500 ms | 0.25 deg | 0.40 deg | 0.12 | 15% | 2500 ms |
+| standard | 1200 ms | 20 | 0.15 | 0.20 | 300 ms | 0.20 deg | 0.35 deg | 0.08 | 0% | 1000 ms |
+| vibration low | 3000 ms | 45 | 0.80 | 1.20 | 500 ms | 0.45 deg | 0.55 deg | 0.25 | 10% | 1500 ms |
+| vibration high | 5000 ms | 75 | 2.00 | 3.00 | 1000 ms | 1.00 deg | 0.80 deg | 0.50 | 20% | 2500 ms |
 
 All profiles require at least 85% of the configured time span, automatic capture requires a passing stability result, and each still session accepts at most two captures. The app retains up to 40 raw captures, uses up to 32 sessions for jackknife uncertainty, and renders the latest 40 rows plus the baseline.
 
 The 1.2, 3, and 5 second values are rolling sensor-data window lengths. Each window is used both to decide whether the attitude is stable and to calculate the averaged gravity vector stored for that capture. They are not fixed delays added after a separate stillness decision. The second capture at one position uses the same rolling-window process after the profile-specific cooldown has elapsed.
+
+Crossing a stillness threshold once does not rearm automatic capture. The failed condition must continue for 500, 750, or 1000 ms for the standard, vibration-low, or vibration-high profile, and the filtered gravity direction must also move at least 0.20, 0.30, or 0.40 degrees from the last captured direction. The angle is checked again when a stable result returns. Until these conditions pass, the app keeps the current session locked and displays a held state. This hysteresis prevents threshold flicker at one physical steering position from creating multiple independent sessions.
 
 ### Vibration filtering
 
 The vibration profiles do not rely only on relaxed raw standard-deviation thresholds:
 
 1. Retain 3 or 5 seconds of rolling acceleration-including-gravity samples.
-2. Divide the window into 375 or 500 ms blocks and average each block independently.
+2. Divide the window into 500 or 1000 ms blocks and average each block independently.
 3. Compute a component-wise trimmed mean of the block vectors, then normalize it as the candidate gravity direction.
 4. Check raw per-axis and magnitude standard deviations as upper safety limits.
 5. Compute RMS angular deviation of the block directions from the candidate direction.
