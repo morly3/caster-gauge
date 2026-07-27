@@ -1,0 +1,2190 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Caster Gauge v0.5.4 - 2026-07-17</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --panel: #141b23;
+      --panel-2: #10161d;
+      --border: #273340;
+      --text: #edf3f7;
+      --muted: #93a2ad;
+      --accent: #28d6a2;
+      --accent-2: #64a8ff;
+      --warn: #ffb454;
+      --danger: #ff6b6b;
+      --good: #7bd88f;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    header {
+      position: relative;
+      padding: 8px 12px;
+      padding-right: 110px;
+      border-bottom: 1px solid var(--border);
+      background: #0e141b;
+    }
+
+    .header-link {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      color: var(--accent-2);
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .header-link:hover,
+    .header-link:focus-visible {
+      text-decoration: underline;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+
+    .sub {
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    main {
+      width: min(980px, 100%);
+      margin: 0 auto;
+      padding: 8px;
+    }
+
+    section {
+      margin-bottom: 8px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .grid.cols-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .grid.cols-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+    }
+
+    .metric {
+      min-height: 58px;
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.35;
+    }
+
+    .value {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 18px;
+      font-weight: 700;
+      margin-top: 2px;
+      overflow-wrap: anywhere;
+    }
+
+    .result {
+      border-color: rgba(40, 214, 162, 0.7);
+      background: #11211f;
+    }
+
+    .result .value {
+      font-size: 36px;
+      color: var(--accent);
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 6px;
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      background: var(--bg);
+      padding-bottom: 6px;
+    }
+
+    button,
+    select,
+    input[type="checkbox"] {
+      font: inherit;
+    }
+
+    button,
+    select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      min-height: 40px;
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 8px 10px;
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #06110e;
+    }
+
+    button.danger {
+      color: var(--danger);
+      border-color: rgba(255, 107, 107, 0.55);
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .settings {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 36px;
+      color: var(--text);
+    }
+
+    .status {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      min-height: 16px;
+    }
+
+    .status.warn {
+      color: var(--warn);
+    }
+
+    .status.danger {
+      color: var(--danger);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+    }
+
+    th,
+    td {
+      padding: 5px 4px;
+      border-bottom: 1px solid var(--border);
+      text-align: right;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: nowrap;
+    }
+
+    th:first-child,
+    td:first-child,
+    th:nth-child(2),
+    td:nth-child(2) {
+      text-align: left;
+    }
+
+    th {
+      color: var(--muted);
+      background: var(--panel-2);
+      position: sticky;
+      top: 0;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      max-height: 132px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .app-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+      gap: 8px;
+      align-items: start;
+    }
+
+    .app-grid > *,
+    .grid > *,
+    .toolbar > * {
+      min-width: 0;
+    }
+
+    .top-result {
+      margin-bottom: 8px;
+    }
+
+    .telemetry {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .secondary-results {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .settings .mount-field {
+      grid-column: 1 / -1;
+    }
+
+    .settings .stillness-field {
+      grid-column: 1 / -1;
+    }
+
+    .status-panel {
+      min-height: 42px;
+    }
+
+    .good {
+      color: var(--good);
+    }
+
+    .bad {
+      color: var(--danger);
+    }
+
+    @media (max-width: 740px) {
+      header {
+        padding: 6px 10px;
+        padding-right: 100px;
+      }
+
+      .header-link {
+        top: 6px;
+        right: 10px;
+      }
+
+      header .sub + .sub {
+        display: none;
+      }
+
+      main {
+        padding: 6px;
+      }
+
+      .app-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .telemetry {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .secondary-results {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .settings {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .result .value {
+        font-size: 32px;
+      }
+
+      .result .status {
+        display: none;
+      }
+
+      .toolbar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 5px;
+      }
+
+      .toolbar .primary-action {
+        grid-column: 1 / -1;
+      }
+
+      .table-wrap {
+        max-height: 240px;
+      }
+
+      .hide-mobile {
+        display: none;
+      }
+
+      button,
+      select {
+        min-height: 34px;
+        padding: 6px 8px;
+      }
+
+      .panel {
+        padding: 6px;
+      }
+
+      .metric {
+        min-height: 48px;
+      }
+
+      .value {
+        font-size: 15px;
+      }
+
+      section {
+        margin-bottom: 6px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Caster Gauge v0.5.4</h1>
+    <a class="header-link" href="https://note.com/mk_morly/n/na2ac85d692a2" target="_blank" rel="noopener noreferrer">解説記事 ↗</a>
+    <div class="sub">更新日: 2026-07-17</div>
+    <div class="sub">重力ベクトルの平面フィットでステアリング軸を推定</div>
+  </header>
+
+  <main>
+    <section class="toolbar">
+      <button id="permissionBtn" class="primary primary-action">1 センサー許可</button>
+      <button id="baselineBtn" class="primary-action">2 直進基準取得</button>
+      <button id="sampleBtn">手動で取得</button>
+      <button id="csvBtn">CSV</button>
+      <button id="removeBtn">最後を削除</button>
+      <button id="clearBtn" class="danger">全クリア</button>
+      <button id="reflectBtn" class="primary">測定結果として反映</button>
+      <button id="debugBtn" hidden>模擬データ</button>
+    </section>
+
+    <div class="app-grid">
+      <div>
+        <section class="panel">
+          <div class="settings">
+            <div class="field mount-field">
+              <span class="label">次の操作</span>
+              <div class="status" id="mountStatus">画面をホイール外側へ向けて立てます</div>
+            </div>
+            <label class="field stillness-field">
+              <span class="label">静止判定</span>
+              <select id="stillnessLevel">
+                <option value="standard" selected>標準（直近1.2秒を判定・平均）</option>
+                <option value="vibrationLow">振動対応・弱（直近3秒を判定・平均）</option>
+                <option value="vibrationHigh">振動対応・強（直近5秒を判定・平均）</option>
+              </select>
+              <span class="status" id="stillnessDetail">判定データ待ち</span>
+            </label>
+            <label class="check">
+              <input id="reverseForward" type="checkbox">
+              前方向を反転
+            </label>
+          </div>
+        </section>
+
+        <section class="panel result top-result">
+          <div class="label">キャスター角</div>
+          <div class="value" id="caster">--</div>
+          <div class="status" id="signHint">表示は絶対値です</div>
+        </section>
+
+        <section class="panel status-panel">
+          <div class="status" id="status">センサー許可を押してください。iOS ではユーザー操作からの許可が必要です。</div>
+        </section>
+      </div>
+
+      <div>
+        <section class="grid secondary-results">
+          <div class="panel metric">
+            <div class="label">キングピン角相当</div>
+            <div class="value" id="sai">--</div>
+          </div>
+          <div class="panel metric">
+            <div class="label">RMS</div>
+            <div class="value" id="rms">--</div>
+          </div>
+          <div class="panel metric">
+            <div class="label">安定度</div>
+            <div class="value" id="quality">--</div>
+          </div>
+          <div class="panel metric">
+            <div class="label">SE / 95%幅</div>
+            <div class="value" id="uncertainty">--</div>
+          </div>
+        </section>
+
+        <section class="grid telemetry">
+          <div class="panel metric">
+            <div class="label">静止</div>
+            <div class="value" id="stillState">--</div>
+          </div>
+          <div class="panel metric">
+            <div class="label">位置 / 取得</div>
+            <div class="value" id="pointCount">0</div>
+          </div>
+          <div class="panel metric hide-mobile">
+            <div class="label">状態</div>
+            <div class="value" id="sensorState">待機</div>
+          </div>
+          <div class="panel metric hide-mobile">
+            <div class="label">G</div>
+            <div class="value" id="gmag">--</div>
+          </div>
+          <div class="panel metric hide-mobile">
+            <div class="label">gx</div>
+            <div class="value" id="gx">--</div>
+          </div>
+          <div class="panel metric hide-mobile">
+            <div class="label">gy</div>
+            <div class="value" id="gy">--</div>
+          </div>
+          <div class="panel metric hide-mobile">
+            <div class="label">gz</div>
+            <div class="value" id="gz">--</div>
+          </div>
+        </section>
+
+        <section>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>位置</th>
+                  <th>種別</th>
+                  <th>gx</th>
+                  <th>gy</th>
+                  <th>gz</th>
+                  <th>n</th>
+                  <th>std</th>
+                  <th>使用</th>
+                </tr>
+              </thead>
+              <tbody id="pointRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const MIN_FIT_SESSIONS = 5;
+    const AUTO_ADD_POINTS_PER_STILL_SESSION = 2;
+    const MAX_MEASUREMENT_POINTS = 40;
+    const MAX_UNCERTAINTY_SESSIONS = 32;
+    const MAX_RENDERED_POINT_ROWS = 40;
+    const DENSITY_WEIGHT_BAND_DEG = 4;
+    const MIN_DENSITY_WEIGHT = 0.5;
+    const MAX_DENSITY_WEIGHT = 2;
+    const ROBUST_MAX_ITERATIONS = 10;
+    const ROBUST_TUKEY_C = 4.685;
+    const ROBUST_HUBER_K = 1.5;
+    const ROBUST_MIN_SCALE = 0.00075;
+    const GOOD_RMS_RESIDUAL = 0.008;
+    const WARN_RMS_RESIDUAL = 0.020;
+    const GOOD_STANDARD_ERROR_DEG = 0.10;
+    const WARN_STANDARD_ERROR_DEG = 0.30;
+    const MIN_ANGULAR_SPAN_DEG = 3;
+    const MIN_PLANE_SEPARATION_RATIO = 4;
+    const DEBUG_MODE = new URLSearchParams(location.search).get("debug");
+    const STILLNESS_PROFILES = Object.freeze({
+      standard: {
+        durationMs: 1200,
+        minSampleCount: 20,
+        maxAxisStd: 0.15,
+        maxMagStd: 0.20,
+        blockDurationMs: 300,
+        minBlockCount: 3,
+        maxBlockAngleRmsDeg: 0.20,
+        maxBlockDriftDeg: 0.35,
+        maxBlockMagStd: 0.08,
+        trimFraction: 0,
+        cooldownMs: 1000,
+        rearmUnstableMs: 500,
+        rearmAngleDeg: 0.20
+      },
+      vibrationLow: {
+        durationMs: 3000,
+        minSampleCount: 45,
+        maxAxisStd: 0.80,
+        maxMagStd: 1.20,
+        blockDurationMs: 500,
+        minBlockCount: 5,
+        maxBlockAngleRmsDeg: 0.45,
+        maxBlockDriftDeg: 0.55,
+        maxBlockMagStd: 0.25,
+        trimFraction: 0.10,
+        cooldownMs: 1500,
+        rearmUnstableMs: 750,
+        rearmAngleDeg: 0.30
+      },
+      vibrationHigh: {
+        durationMs: 5000,
+        minSampleCount: 75,
+        maxAxisStd: 2.00,
+        maxMagStd: 3.00,
+        blockDurationMs: 1000,
+        minBlockCount: 4,
+        maxBlockAngleRmsDeg: 1.00,
+        maxBlockDriftDeg: 0.80,
+        maxBlockMagStd: 0.50,
+        trimFraction: 0.20,
+        cooldownMs: 2500,
+        rearmUnstableMs: 1000,
+        rearmAngleDeg: 0.40
+      }
+    });
+
+    const state = {
+      latestGravity: null,
+      recent: [],
+      points: [],
+      baseline: null,
+      result: null,
+      sensorReady: false,
+      autoAddEnabled: false,
+      baselinePending: false,
+      wasStill: false,
+      stillSessionPointCount: 0,
+      activeStillSessionId: null,
+      nextSessionId: 1,
+      lastAutoAddAt: 0,
+      unstableSince: null,
+      lastCapturedDirection: null,
+      movementConfirmed: false,
+      stillnessLevel: "standard",
+      screenOutNormal: v(0, 0, 1),
+      audioContext: null,
+      wakeLock: null,
+      debug: ["1", "auto", "outlier", "vibration", "hysteresis"].includes(DEBUG_MODE)
+    };
+
+    const els = {
+      gx: document.getElementById("gx"),
+      gy: document.getElementById("gy"),
+      gz: document.getElementById("gz"),
+      gmag: document.getElementById("gmag"),
+      sensorState: document.getElementById("sensorState"),
+      stillState: document.getElementById("stillState"),
+      stillnessDetail: document.getElementById("stillnessDetail"),
+      caster: document.getElementById("caster"),
+      sai: document.getElementById("sai"),
+      rms: document.getElementById("rms"),
+      quality: document.getElementById("quality"),
+      uncertainty: document.getElementById("uncertainty"),
+      pointCount: document.getElementById("pointCount"),
+      status: document.getElementById("status"),
+      pointRows: document.getElementById("pointRows"),
+      signHint: document.getElementById("signHint"),
+      mountStatus: document.getElementById("mountStatus"),
+      reverseForward: document.getElementById("reverseForward"),
+      stillnessLevel: document.getElementById("stillnessLevel"),
+      permissionBtn: document.getElementById("permissionBtn"),
+      baselineBtn: document.getElementById("baselineBtn"),
+      sampleBtn: document.getElementById("sampleBtn"),
+      removeBtn: document.getElementById("removeBtn"),
+      clearBtn: document.getElementById("clearBtn"),
+      csvBtn: document.getElementById("csvBtn"),
+      debugBtn: document.getElementById("debugBtn")
+    };
+
+    function v(x, y, z) {
+      return [x, y, z];
+    }
+
+    function add(a, b) {
+      return v(a[0] + b[0], a[1] + b[1], a[2] + b[2]);
+    }
+
+    function sub(a, b) {
+      return v(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    }
+
+    function scale(a, s) {
+      return v(a[0] * s, a[1] * s, a[2] * s);
+    }
+
+    function dot(a, b) {
+      return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    }
+
+    function cross(a, b) {
+      return v(
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0]
+      );
+    }
+
+    function mag(a) {
+      return Math.sqrt(dot(a, a));
+    }
+
+    function normalize(a) {
+      const m = mag(a);
+      return m > 1e-9 ? scale(a, 1 / m) : v(0, 0, 0);
+    }
+
+    function clampFinite(n, fallback = 0) {
+      return Number.isFinite(n) ? n : fallback;
+    }
+
+    function fmt(n, digits = 3) {
+      return Number.isFinite(n) ? n.toFixed(digits) : "--";
+    }
+
+    function fmtDeg(n) {
+      return Number.isFinite(n) ? `${n.toFixed(2)} deg` : "--";
+    }
+
+    function ensureAudio() {
+      const AudioCtor = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtor) {
+        return null;
+      }
+      if (!state.audioContext) {
+        state.audioContext = new AudioCtor();
+      }
+      if (state.audioContext.state === "suspended") {
+        state.audioContext.resume().catch(() => {});
+      }
+      return state.audioContext;
+    }
+
+    function playCaptureSound() {
+      const audio = ensureAudio();
+      if (!audio) {
+        return;
+      }
+
+      const now = audio.currentTime;
+      const duration = 0.26;
+      const mix = audio.createGain();
+      const envelope = audio.createGain();
+      const saturator = audio.createWaveShaper();
+      const output = audio.createGain();
+      const curve = new Float32Array(1024);
+
+      for (let index = 0; index < curve.length; index += 1) {
+        const x = index * 2 / (curve.length - 1) - 1;
+        curve[index] = Math.tanh(5 * x);
+      }
+      saturator.curve = curve;
+      saturator.oversample = "4x";
+
+      envelope.gain.setValueAtTime(0.0001, now);
+      envelope.gain.exponentialRampToValueAtTime(1.0, now + 0.008);
+      envelope.gain.setValueAtTime(1.0, now + 0.19);
+      envelope.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      output.gain.setValueAtTime(2.5, now);
+
+      mix.connect(envelope);
+      envelope.connect(saturator);
+      saturator.connect(output);
+      output.connect(audio.destination);
+
+      [
+        { frequency: 1050, level: 0.90, type: "square" },
+        { frequency: 1520, level: 0.70, type: "square" },
+        { frequency: 2100, level: 0.55, type: "sawtooth" }
+      ].forEach((tone) => {
+        const oscillator = audio.createOscillator();
+        const level = audio.createGain();
+        oscillator.type = tone.type;
+        oscillator.frequency.setValueAtTime(tone.frequency, now);
+        oscillator.frequency.exponentialRampToValueAtTime(tone.frequency * 1.08, now + 0.11);
+        level.gain.setValueAtTime(tone.level, now);
+        oscillator.connect(level);
+        level.connect(mix);
+        oscillator.start(now);
+        oscillator.stop(now + duration + 0.02);
+      });
+    }
+
+    function playStableSound() {
+      playCaptureSound();
+      window.setTimeout(playCaptureSound, 310);
+    }
+
+    async function requestWakeLock() {
+      if (!("wakeLock" in navigator)) {
+        return false;
+      }
+
+      try {
+        if (state.wakeLock) {
+          return true;
+        }
+        state.wakeLock = await navigator.wakeLock.request("screen");
+        state.wakeLock.addEventListener("release", () => {
+          state.wakeLock = null;
+        });
+        return true;
+      } catch (_) {
+        state.wakeLock = null;
+        return false;
+      }
+    }
+
+    async function releaseWakeLock() {
+      if (!state.wakeLock) {
+        return;
+      }
+      try {
+        await state.wakeLock.release();
+      } catch (_) {
+        // Ignore release errors; the browser may already have released it.
+      }
+      state.wakeLock = null;
+    }
+
+    function getFrame() {
+      const verticalUp = state.baseline ? scale(state.baseline.normalized, -1) : v(0, 0, -1);
+      const wheelNormalPhone = state.screenOutNormal;
+      const lateralRaw = sub(wheelNormalPhone, scale(verticalUp, dot(wheelNormalPhone, verticalUp)));
+      let lateral = normalize(lateralRaw);
+
+      if (mag(lateral) < 1e-6) {
+        lateral = normalize(cross(verticalUp, v(1, 0, 0)));
+        if (mag(lateral) < 1e-6) {
+          lateral = normalize(cross(verticalUp, v(0, 1, 0)));
+        }
+      }
+
+      let forward = normalize(cross(verticalUp, lateral));
+      if (els.reverseForward.checked) {
+        forward = scale(forward, -1);
+      }
+
+      return { verticalUp, wheelNormalPhone, lateral, forward };
+    }
+
+    function onMotion(event) {
+      const g = event.accelerationIncludingGravity;
+      if (!g) {
+        setStatus("accelerationIncludingGravity が取得できません。対応ブラウザで開いてください。", "danger");
+        return;
+      }
+
+      // DeviceMotion の軸は端末座標系です。端末やブラウザで符号の扱いが違う場合があるため、
+      // 測定時は画面側をホイール外側へ向ける前提で、画面外向き(+Z)を車両外側として扱います。
+      const sample = v(clampFinite(g.x), clampFinite(g.y), clampFinite(g.z));
+      state.latestGravity = sample;
+      state.sensorReady = true;
+      const now = performance.now();
+      state.recent.push({ t: now, g: sample });
+      const cutoff = now - getStillnessProfile().durationMs;
+      state.recent = state.recent.filter((item) => item.t >= cutoff);
+      maybeRecordPendingBaseline();
+      maybeAutoAddPoint();
+      renderLive();
+    }
+
+    async function requestSensors() {
+      ensureAudio();
+      try {
+        if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
+          const motion = await DeviceMotionEvent.requestPermission();
+          if (motion !== "granted") {
+            setStatus("DeviceMotion の許可が得られませんでした。", "danger");
+            return;
+          }
+        }
+
+        if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+          try {
+            await DeviceOrientationEvent.requestPermission();
+          } catch (_) {
+            // キャスター計算には DeviceOrientation を使わないため、失敗しても継続します。
+          }
+        }
+
+        window.addEventListener("devicemotion", onMotion, { passive: true });
+        const locked = await requestWakeLock();
+        setStatus("画面をホイール外側へ向けて固定し、直進基準を記録してください。");
+        if (!locked) {
+          setStatus("センサー準備完了。画面スリープ抑止はこのブラウザでは使えない可能性があります。", "warn");
+        }
+      } catch (err) {
+        setStatus(`センサー許可に失敗しました: ${err.message}`, "danger");
+      }
+    }
+
+    function getStillnessProfile() {
+      return STILLNESS_PROFILES[state.stillnessLevel] || STILLNESS_PROFILES.standard;
+    }
+
+    /*
+     * Vibration-tolerant stillness estimation
+     *
+     * The rolling sensor window is divided into time blocks. Periodic motion
+     * is reduced inside each block, and the block means are robustly averaged.
+     * Raw vibration has a profile-specific safety limit, while angular scatter
+     * and first-to-last drift of the block means reject actual attitude change.
+     */
+    function summarizeSamples(samples) {
+      const profile = getStillnessProfile();
+      if (samples.length < profile.minSampleCount) {
+        return {
+          ok: false,
+          state: "collecting",
+          reason: `データ蓄積中 (${samples.length}/${profile.minSampleCount})`
+        };
+      }
+
+      const sampleSpanMs = samples[samples.length - 1].t - samples[0].t;
+      if (sampleSpanMs < profile.durationMs * 0.85) {
+        return {
+          ok: false,
+          state: "collecting",
+          reason: `データ蓄積中 ${(sampleSpanMs / 1000).toFixed(1)}/${(profile.durationMs / 1000).toFixed(1)}秒`
+        };
+      }
+
+      const blockMeans = buildBlockMeans(samples, profile);
+      if (blockMeans.length < profile.minBlockCount) {
+        return {
+          ok: false,
+          state: "collecting",
+          reason: `平均ブロック蓄積中 (${blockMeans.length}/${profile.minBlockCount})`
+        };
+      }
+
+      const rawMean = trimmedMeanVector(blockMeans, profile.trimFraction);
+      const normalized = normalize(rawMean);
+      const mags = samples.map((item) => mag(item.g));
+      const axisStd = [0, 1, 2].map((axis) => std(samples.map((item) => item.g[axis])));
+      const magStd = std(mags);
+      const maxAxisStd = Math.max(...axisStd);
+      const blockDirections = blockMeans.map((block) => normalize(block));
+      const blockAngleRmsDeg = Math.sqrt(mean(blockDirections.map((direction) => {
+        const angleDeg = vectorAngleRad(direction, normalized) * 180 / Math.PI;
+        return angleDeg * angleDeg;
+      })));
+      const edgeCount = Math.max(1, Math.floor(blockDirections.length / 3));
+      const firstDirection = normalize(meanVector(blockDirections.slice(0, edgeCount)));
+      const lastDirection = normalize(meanVector(blockDirections.slice(-edgeCount)));
+      const blockDriftDeg = vectorAngleRad(firstDirection, lastDirection) * 180 / Math.PI;
+      const blockMagStd = std(blockMeans.map((block) => mag(block)));
+
+      const common = {
+        rawMean,
+        normalized,
+        sampleCount: samples.length,
+        sampleSpanMs,
+        axisStd,
+        magStd,
+        blockCount: blockMeans.length,
+        blockAngleRmsDeg,
+        blockDriftDeg,
+        blockMagStd,
+        stillnessLevel: state.stillnessLevel
+      };
+
+      if (maxAxisStd > profile.maxAxisStd) {
+        return {
+          ok: false,
+          state: "moving",
+          reason: `軸振動 ${maxAxisStd.toFixed(2)} > ${profile.maxAxisStd.toFixed(2)} m/s²`,
+          ...common
+        };
+      }
+
+      if (magStd > profile.maxMagStd) {
+        return {
+          ok: false,
+          state: "moving",
+          reason: `合成振動 ${magStd.toFixed(2)} > ${profile.maxMagStd.toFixed(2)} m/s²`,
+          ...common
+        };
+      }
+
+      if (blockAngleRmsDeg > profile.maxBlockAngleRmsDeg) {
+        return {
+          ok: false,
+          state: "moving",
+          reason: `方向揺れ ${blockAngleRmsDeg.toFixed(2)} > ${profile.maxBlockAngleRmsDeg.toFixed(2)}°`,
+          ...common
+        };
+      }
+
+      if (blockDriftDeg > profile.maxBlockDriftDeg) {
+        return {
+          ok: false,
+          state: "moving",
+          reason: `姿勢移動 ${blockDriftDeg.toFixed(2)} > ${profile.maxBlockDriftDeg.toFixed(2)}°`,
+          ...common
+        };
+      }
+
+      if (blockMagStd > profile.maxBlockMagStd) {
+        return {
+          ok: false,
+          state: "moving",
+          reason: `平均G変動 ${blockMagStd.toFixed(2)} > ${profile.maxBlockMagStd.toFixed(2)} m/s²`,
+          ...common
+        };
+      }
+
+      return {
+        ok: true,
+        state: "stable",
+        reason: "",
+        ...common
+      };
+    }
+
+    function buildBlockMeans(samples, profile) {
+      const endTime = samples[samples.length - 1].t;
+      const startTime = endTime - profile.durationMs;
+      const blockCount = Math.floor(profile.durationMs / profile.blockDurationMs);
+      const blocks = [];
+
+      for (let blockIndex = 0; blockIndex < blockCount; blockIndex += 1) {
+        const blockStart = startTime + blockIndex * profile.blockDurationMs;
+        const blockEnd = blockStart + profile.blockDurationMs;
+        const blockSamples = samples.filter((item) =>
+          item.t >= blockStart &&
+          (blockIndex === blockCount - 1 ? item.t <= blockEnd : item.t < blockEnd)
+        );
+        if (blockSamples.length >= 2) {
+          blocks.push(scale(
+            blockSamples.reduce((acc, item) => add(acc, item.g), v(0, 0, 0)),
+            1 / blockSamples.length
+          ));
+        }
+      }
+      return blocks;
+    }
+
+    function meanVector(points) {
+      return points.length > 0
+        ? scale(points.reduce((acc, point) => add(acc, point), v(0, 0, 0)), 1 / points.length)
+        : v(0, 0, 0);
+    }
+
+    function trimmedMeanVector(points, trimFraction) {
+      return [0, 1, 2].map((axis) => trimmedMean(points.map((point) => point[axis]), trimFraction));
+    }
+
+    function trimmedMean(values, trimFraction) {
+      const sorted = values.slice().sort((a, b) => a - b);
+      const trimCount = Math.min(Math.floor(sorted.length * trimFraction), Math.floor((sorted.length - 1) / 2));
+      return mean(sorted.slice(trimCount, sorted.length - trimCount));
+    }
+
+    function mean(values) {
+      return values.reduce((sum, n) => sum + n, 0) / Math.max(values.length, 1);
+    }
+
+    function std(values) {
+      const m = mean(values);
+      return Math.sqrt(mean(values.map((n) => (n - m) ** 2)));
+    }
+
+    function median(values) {
+      if (values.length === 0) {
+        return 0;
+      }
+      const sorted = values.slice().sort((a, b) => a - b);
+      const middle = Math.floor(sorted.length / 2);
+      return sorted.length % 2 === 0
+        ? (sorted[middle - 1] + sorted[middle]) / 2
+        : sorted[middle];
+    }
+
+    function createSessionId(prefix = "S") {
+      const id = `${prefix}${String(state.nextSessionId).padStart(3, "0")}`;
+      state.nextSessionId += 1;
+      return id;
+    }
+
+    function recordBaseline() {
+      requestWakeLock();
+      state.baselinePending = true;
+      state.autoAddEnabled = false;
+      setStatus("直進基準の記録待ちです。静止したタイミングで自動取得します。");
+      render();
+    }
+
+    function maybeRecordPendingBaseline() {
+      if (!state.baselinePending) {
+        return;
+      }
+
+      const summary = summarizeSamples(state.recent);
+      if (!summary.ok) {
+        return;
+      }
+
+      state.baseline = {
+        ...summary,
+        pointType: "直進基準",
+        timestamp: new Date().toISOString()
+      };
+      state.baselinePending = false;
+      state.autoAddEnabled = true;
+      state.points = [];
+      state.result = null;
+      state.lastAutoAddAt = 0;
+      state.unstableSince = null;
+      state.lastCapturedDirection = null;
+      state.movementConfirmed = false;
+      state.wasStill = false;
+      state.stillSessionPointCount = 0;
+      state.activeStillSessionId = null;
+      state.nextSessionId = 1;
+      playCaptureSound();
+      setStatus("静止を検出して直進基準を記録しました。続けて測定点を自動追加します。");
+      maybeAutoAddPoint(true);
+      render();
+    }
+
+    function addPoint() {
+      const summary = summarizeSamples(state.recent);
+      if (!summary.ok) {
+        setStatus(`測定点を追加できません: ${summary.reason}`, "warn");
+        return;
+      }
+
+      const fitted = addPointFromSummary(summary, `手動${state.points.length + 1}`, createSessionId("M"));
+      const sessionCount = buildSessionRepresentatives(state.points).length;
+      setStatus(fitted ? `手動位置 ${sessionCount} を追加し、推定結果を更新しました。` : `手動位置 ${sessionCount} を追加しました。`);
+      render();
+    }
+
+    function addPointFromSummary(summary, pointType, sessionId = createSessionId()) {
+      state.points.push({
+        ...summary,
+        pointType,
+        sessionId,
+        timestamp: new Date().toISOString(),
+        usedForFit: true,
+        excludedReason: summary.excludedReason || ""
+      });
+      trimMeasurementPoints();
+      state.result = null;
+      const fitted = updateFitIfReady();
+      if (fitted && Number.isFinite(state.result.uncertainty95Deg) && state.result.uncertainty95Deg < 0.1) {
+        playStableSound();
+      } else {
+        playCaptureSound();
+      }
+      return fitted;
+    }
+
+    function trimMeasurementPoints() {
+      while (state.points.length > MAX_MEASUREMENT_POINTS) {
+        const removableIndex = choosePointToTrim();
+        state.points.splice(removableIndex, 1);
+      }
+    }
+
+    function choosePointToTrim() {
+      const sessionCounts = new Map();
+      state.points.forEach((point, index) => {
+        const sessionId = point.sessionId || `legacy-${index}`;
+        sessionCounts.set(sessionId, (sessionCounts.get(sessionId) || 0) + 1);
+      });
+      const duplicateIndexes = state.points
+        .map((point, index) => ({ point, index }))
+        .filter(({ point, index }) => sessionCounts.get(point.sessionId || `legacy-${index}`) > 1)
+        .map(({ index }) => index);
+      const candidates = duplicateIndexes.length > 0 ? duplicateIndexes : state.points.map((_, index) => index);
+
+      if (state.points.length < MIN_FIT_SESSIONS) {
+        return candidates[0];
+      }
+
+      const vectors = state.points.map((point) => point.normalized);
+      let axis = null;
+      let c = 0;
+      try {
+        const robust = robustFitPlane(vectors, computeDensityWeights(vectors));
+        const weights = robust.weights;
+        const fit = robust.fit;
+        axis = fit.axis;
+        if (state.baseline && dot(axis, getFrame().verticalUp) < 0) {
+          axis = scale(axis, -1);
+        }
+        c = weightedMean(vectors.map((g) => dot(axis, g)), weights);
+      } catch (_) {
+        return candidates[0];
+      }
+
+      const densities = computePointDensities(vectors);
+      const maxDensity = Math.max(...densities, 1e-9);
+      const residuals = vectors.map((g) => Math.abs(dot(axis, g) - c));
+      const maxResidual = Math.max(...residuals, 1e-9);
+
+      let bestIndex = candidates[0];
+      let bestScore = -Infinity;
+      for (const index of candidates) {
+        const residualScore = residuals[index] / maxResidual;
+        const densityScore = densities[index] / maxDensity;
+        const ageScore = 1 - index / Math.max(state.points.length - 1, 1);
+        const score = 0.55 * residualScore + 0.35 * densityScore + 0.10 * ageScore;
+        if (score > bestScore) {
+          bestScore = score;
+          bestIndex = index;
+        }
+      }
+      return bestIndex;
+    }
+
+    function updateMovementRearm(summary, now) {
+      if (summary.state !== "moving" || !summary.normalized || !state.lastCapturedDirection) {
+        return false;
+      }
+
+      if (state.unstableSince === null) {
+        state.unstableSince = now;
+      }
+
+      const profile = getStillnessProfile();
+      const movedAngleDeg = vectorAngleRad(summary.normalized, state.lastCapturedDirection) * 180 / Math.PI;
+      if (now - state.unstableSince < profile.rearmUnstableMs || movedAngleDeg < profile.rearmAngleDeg) {
+        return false;
+      }
+
+      state.wasStill = false;
+      state.stillSessionPointCount = 0;
+      state.activeStillSessionId = null;
+      state.movementConfirmed = true;
+      return true;
+    }
+
+    function maybeAutoAddPoint(force = false) {
+      if (!state.autoAddEnabled || !state.baseline) {
+        return;
+      }
+
+      const now = performance.now();
+      const summary = summarizeSamples(state.recent);
+      if (!summary.ok) {
+        updateMovementRearm(summary, now);
+        return;
+      }
+
+      state.unstableSince = null;
+
+      if (!state.wasStill && state.movementConfirmed && state.lastCapturedDirection) {
+        const stableMoveDeg = vectorAngleRad(summary.normalized, state.lastCapturedDirection) * 180 / Math.PI;
+        if (stableMoveDeg < getStillnessProfile().rearmAngleDeg) {
+          state.wasStill = true;
+          state.stillSessionPointCount = AUTO_ADD_POINTS_PER_STILL_SESSION;
+          state.movementConfirmed = false;
+          return;
+        }
+      }
+
+      if (!state.wasStill) {
+        state.wasStill = true;
+        state.stillSessionPointCount = 0;
+        state.lastAutoAddAt = 0;
+        state.activeStillSessionId = createSessionId();
+        state.movementConfirmed = false;
+      }
+
+      if (state.stillSessionPointCount >= AUTO_ADD_POINTS_PER_STILL_SESSION) {
+        return;
+      }
+
+      if (!force && state.stillSessionPointCount > 0 && now - state.lastAutoAddAt < getStillnessProfile().cooldownMs) {
+        return;
+      }
+
+      const fitted = addPointFromSummary({
+        ...summary,
+        excludedReason: ""
+      }, `自動${state.points.length + 1}`, state.activeStillSessionId);
+      state.lastAutoAddAt = now;
+      state.lastCapturedDirection = summary.normalized.slice();
+      state.stillSessionPointCount += 1;
+      const sessionCount = buildSessionRepresentatives(state.points).length;
+      setStatus(fitted
+        ? `静止位置 ${sessionCount}（取得 ${state.stillSessionPointCount}/2）を更新し、推定結果を再計算しました。`
+        : `静止位置 ${sessionCount}（取得 ${state.stillSessionPointCount}/2）を記録しました。`);
+      render();
+    }
+
+    function updateFitIfReady() {
+      const usable = state.points.filter((point) => point.usedForFit);
+      if (!state.baseline || buildSessionRepresentatives(usable).length < MIN_FIT_SESSIONS) {
+        return false;
+      }
+      state.result = calculateCasterResult(usable);
+      return true;
+    }
+
+    /*
+     * Steering-axis estimation
+     *
+     * This implementation uses normalized gravity vectors captured from
+     * DeviceMotionEvent.accelerationIncludingGravity at multiple stationary
+     * steering positions. It does not use DeviceOrientation heading values,
+     * integrated gyro angles, steering angle, or camber angle as independent
+     * inputs. It also does not construct three virtual points on the wheel
+     * axis.
+     *
+     * The recorded straight-ahead baseline defines vehicle vertical in the
+     * phone coordinate system and is used to decompose the estimated axis into
+     * vertical, lateral, and forward components. The baseline sample itself is
+     * not included in the plane-fit point set below.
+     *
+     * Captures from the same stationary steering position are first combined
+     * into one session representative. Density weights are capped, then Tukey
+     * iteratively reweighted least squares rejects clear outliers.
+     * Caster uncertainty is a session-level delete-one jackknife standard
+     * error with an approximate 95% range.
+     */
+    function calculateCasterResult(usable, includeUncertainty = true) {
+      return calculateCasterFromSessions(buildSessionRepresentatives(usable), includeUncertainty, usable.length);
+    }
+
+    function calculateCasterFromSessions(sessions, includeUncertainty = true, rawPointCount = sessions.length) {
+      const vectors = sessions.map((session) => session.normalized);
+      const robust = robustFitPlane(vectors, computeDensityWeights(vectors));
+      const fit = robust.fit;
+      const weights = robust.weights;
+      let axis = fit.axis;
+      const frame = getFrame();
+
+      if (dot(axis, frame.verticalUp) < 0) {
+        axis = scale(axis, -1);
+      }
+
+      const projections = vectors.map((g) => dot(axis, g));
+      const c = weightedMean(projections, weights);
+      const residuals = vectors.map((g) => Math.abs(dot(axis, g) - c));
+      const rmsResidual = weightedRms(residuals, weights);
+      const maxResidual = Math.max(...residuals);
+      const casterSignedDeg = Math.atan2(dot(axis, frame.forward), dot(axis, frame.verticalUp)) * 180 / Math.PI;
+      const saiSignedDeg = Math.atan2(dot(axis, frame.lateral), dot(axis, frame.verticalUp)) * 180 / Math.PI;
+      const casterDeg = Math.abs(casterSignedDeg);
+      const saiDeg = Math.abs(saiSignedDeg);
+      const planeSeparationRatio = fit.eigenvalues[1] / Math.max(fit.eigenvalues[0], 1e-9);
+      const angularSpanDeg = maxPairwiseAngleDeg(vectors);
+      const uncertainty = includeUncertainty ? estimateCasterUncertainty(sessions) : null;
+      const standardErrorDeg = uncertainty ? uncertainty.standardErrorDeg : NaN;
+      const outlierCount = robust.robustWeights.filter((weight) => weight < 0.5).length;
+      const quality = judgeQuality({
+        rmsResidual,
+        sessionCount: sessions.length,
+        planeSeparationRatio,
+        angularSpanDeg,
+        standardErrorDeg,
+        outlierCount
+      });
+
+      return {
+        casterDeg,
+        saiDeg,
+        casterSignedDeg,
+        saiSignedDeg,
+        axis,
+        c,
+        rmsResidual,
+        maxResidual,
+        eigenvalues: fit.eigenvalues,
+        verticalUp: frame.verticalUp,
+        lateral: frame.lateral,
+        forward: frame.forward,
+        quality,
+        planeSeparationRatio,
+        angularSpanDeg,
+        pointCount: sessions.length,
+        rawPointCount,
+        weights,
+        robustWeights: robust.robustWeights,
+        sessionIds: sessions.map((session) => session.sessionId),
+        outlierCount,
+        effectivePointCount: effectiveCount(weights),
+        standardErrorDeg,
+        uncertainty95Deg: uncertainty ? uncertainty.uncertainty95Deg : NaN
+      };
+    }
+
+    function buildSessionRepresentatives(points) {
+      const groups = new Map();
+      points.forEach((point, index) => {
+        const sessionId = point.sessionId || `legacy-${index}`;
+        if (!groups.has(sessionId)) {
+          groups.set(sessionId, []);
+        }
+        groups.get(sessionId).push(point);
+      });
+
+      return Array.from(groups, ([sessionId, captures]) => {
+        const normalized = normalize(scale(
+          captures.reduce((acc, point) => add(acc, point.normalized), v(0, 0, 0)),
+          1 / captures.length
+        ));
+        const rawMean = scale(
+          captures.reduce((acc, point) => add(acc, point.rawMean), v(0, 0, 0)),
+          1 / captures.length
+        );
+        const angularScatterDeg = Math.sqrt(mean(captures.map((point) => {
+          const angleDeg = vectorAngleRad(point.normalized, normalized) * 180 / Math.PI;
+          return angleDeg * angleDeg;
+        })));
+
+        return {
+          sessionId,
+          normalized,
+          rawMean,
+          captureCount: captures.length,
+          sampleCount: captures.reduce((sum, point) => sum + point.sampleCount, 0),
+          angularScatterDeg,
+          pointType: captures[0].pointType
+        };
+      });
+    }
+
+    function computeDensityWeights(points) {
+      if (points.length === 0) {
+        return [];
+      }
+
+      const raw = computePointDensities(points).map((density) => 1 / Math.max(density, 1e-9));
+      const normalized = normalizeWeights(raw);
+      return normalizeWeights(normalized.map((weight) => Math.min(
+        MAX_DENSITY_WEIGHT,
+        Math.max(MIN_DENSITY_WEIGHT, weight)
+      )));
+    }
+
+    function computePointDensities(points) {
+      const band = DENSITY_WEIGHT_BAND_DEG * Math.PI / 180;
+      return points.map((point) => {
+        let density = 0;
+        for (let i = 0; i < points.length; i += 1) {
+          const angle = vectorAngleRad(point, points[i]);
+          density += Math.exp(-((angle / band) ** 2));
+        }
+        return density;
+      });
+    }
+
+    function vectorAngleRad(a, b) {
+      const cos = Math.max(-1, Math.min(1, dot(normalize(a), normalize(b))));
+      return Math.acos(cos);
+    }
+
+    function maxPairwiseAngleDeg(points) {
+      let maxAngle = 0;
+      for (let i = 0; i < points.length; i += 1) {
+        for (let j = i + 1; j < points.length; j += 1) {
+          maxAngle = Math.max(maxAngle, vectorAngleRad(points[i], points[j]));
+        }
+      }
+      return maxAngle * 180 / Math.PI;
+    }
+
+    function normalizeWeights(weights) {
+      if (weights.length === 0) {
+        return [];
+      }
+      const avg = mean(weights);
+      return weights.map((weight) => weight / Math.max(avg, 1e-9));
+    }
+
+    function robustFitPlane(points, baseWeights = points.map(() => 1)) {
+      let weights = normalizeWeights(baseWeights);
+      let robustWeights = points.map(() => 1);
+      let fit = selectRobustInitialFit(points, weights);
+
+      for (let iteration = 0; iteration < ROBUST_MAX_ITERATIONS; iteration += 1) {
+        const projections = points.map((point) => dot(fit.axis, point));
+        robustWeights = computeRobustWeights(projections);
+        const nextWeights = normalizeWeights(baseWeights.map((weight, index) => weight * robustWeights[index]));
+        const change = Math.max(...nextWeights.map((weight, index) => Math.abs(weight - weights[index])));
+        weights = nextWeights;
+        fit = fitPlane(points, weights);
+        if (change < 1e-4) {
+          break;
+        }
+      }
+
+      const finalProjections = points.map((point) => dot(fit.axis, point));
+      robustWeights = computeRobustWeights(finalProjections);
+
+      return { fit, weights, robustWeights };
+    }
+
+    function computeRobustWeights(projections) {
+      const offset = median(projections);
+      const residuals = projections.map((projection) => projection - offset);
+      const robustScale = Math.max(
+        ROBUST_MIN_SCALE,
+        1.4826 * median(residuals.map((residual) => Math.abs(residual)))
+      );
+      const cutoff = ROBUST_TUKEY_C * robustScale;
+      const tukeyWeights = residuals.map((residual) => {
+        const ratio = Math.abs(residual) / cutoff;
+        return ratio < 1 ? (1 - ratio * ratio) ** 2 : 0;
+      });
+
+      if (tukeyWeights.filter((weight) => weight > 0).length >= MIN_FIT_SESSIONS) {
+        return tukeyWeights;
+      }
+
+      const huberCutoff = ROBUST_HUBER_K * robustScale;
+      return residuals.map((residual) => {
+        const absolute = Math.abs(residual);
+        return absolute <= huberCutoff ? 1 : huberCutoff / Math.max(absolute, 1e-9);
+      });
+    }
+
+    function selectRobustInitialFit(points, weights) {
+      let bestFit = fitPlane(points, weights);
+      let bestScore = robustPlaneScore(bestFit.axis, points);
+      if (points.length <= MIN_FIT_SESSIONS) {
+        return bestFit;
+      }
+
+      for (let excluded = 0; excluded < points.length; excluded += 1) {
+        const subset = points.filter((_, index) => index !== excluded);
+        const subsetWeights = weights.filter((_, index) => index !== excluded);
+        const candidate = fitPlane(subset, subsetWeights);
+        const score = robustPlaneScore(candidate.axis, points);
+        if (score < bestScore) {
+          bestScore = score;
+          bestFit = candidate;
+        }
+      }
+      return bestFit;
+    }
+
+    function robustPlaneScore(axis, points) {
+      const projections = points.map((point) => dot(axis, point));
+      const offset = median(projections);
+      return median(projections.map((projection) => Math.abs(projection - offset)));
+    }
+
+    function weightedMeanVec(points, weights) {
+      const total = weights.reduce((sum, w) => sum + w, 0);
+      if (total <= 1e-9) {
+        return scale(points.reduce((acc, p) => add(acc, p), v(0, 0, 0)), 1 / points.length);
+      }
+      return scale(points.reduce((acc, p, i) => add(acc, scale(p, weights[i])), v(0, 0, 0)), 1 / total);
+    }
+
+    function weightedRms(values, weights) {
+      const total = weights.reduce((sum, w) => sum + w, 0);
+      if (total <= 1e-9) {
+        return Math.sqrt(mean(values.map((r) => r * r)));
+      }
+      const sum = values.reduce((acc, r, i) => acc + weights[i] * r * r, 0);
+      return Math.sqrt(sum / total);
+    }
+
+    function weightedMean(values, weights) {
+      const total = weights.reduce((sum, w) => sum + w, 0);
+      if (total <= 1e-9) {
+        return mean(values);
+      }
+      return values.reduce((acc, value, i) => acc + value * weights[i], 0) / total;
+    }
+
+    function effectiveCount(weights) {
+      const sum = weights.reduce((acc, w) => acc + w, 0);
+      const sumSq = weights.reduce((acc, w) => acc + w * w, 0);
+      return sumSq > 1e-9 ? (sum * sum) / sumSq : 0;
+    }
+
+    function estimateCasterUncertainty(sessions) {
+      if (sessions.length <= MIN_FIT_SESSIONS) {
+        return null;
+      }
+
+      const source = thinSessionsForUncertainty(sessions);
+      const casters = [];
+      for (let i = 0; i < source.length; i += 1) {
+        const subset = source.filter((_, index) => index !== i);
+        if (subset.length >= MIN_FIT_SESSIONS) {
+          casters.push(calculateCasterFromSessions(subset, false).casterDeg);
+        }
+      }
+
+      if (casters.length < 2) {
+        return null;
+      }
+
+      const center = mean(casters);
+      const sumSquares = casters.reduce((sum, caster) => sum + (caster - center) ** 2, 0);
+      const standardErrorDeg = Math.sqrt(((casters.length - 1) / casters.length) * sumSquares);
+      return {
+        standardErrorDeg,
+        uncertainty95Deg: 1.96 * standardErrorDeg
+      };
+    }
+
+    function thinSessionsForUncertainty(sessions) {
+      if (sessions.length <= MAX_UNCERTAINTY_SESSIONS) {
+        return sessions;
+      }
+
+      const thinned = [];
+      const last = sessions.length - 1;
+      for (let i = 0; i < MAX_UNCERTAINTY_SESSIONS; i += 1) {
+        const index = Math.round(i * last / (MAX_UNCERTAINTY_SESSIONS - 1));
+        thinned.push(sessions[index]);
+      }
+      return thinned;
+    }
+
+    /*
+     * Weighted least-squares plane fit for measured gravity-vector points.
+     *
+     * The point cloud is centered, a 3x3 covariance matrix is accumulated from
+     * the weighted centered vectors, and symmetric eigendecomposition is
+     * applied. The eigenvector corresponding to the smallest eigenvalue is the
+     * normal of the least-squares plane and is treated as the estimated
+     * steering-axis direction.
+     */
+    function fitPlane(points, weights = points.map(() => 1)) {
+      const center = weightedMeanVec(points, weights);
+      const c = [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0]
+      ];
+
+      for (let i = 0; i < points.length; i += 1) {
+        const p = points[i];
+        const w = weights[i] || 0;
+        const d = sub(p, center);
+        for (let r = 0; r < 3; r += 1) {
+          for (let col = 0; col < 3; col += 1) {
+            c[r][col] += w * d[r] * d[col];
+          }
+        }
+      }
+
+      const eig = jacobiEigenSymmetric3(c);
+      const order = [0, 1, 2].sort((a, b) => eig.values[a] - eig.values[b]);
+      const values = order.map((i) => Math.max(0, eig.values[i]));
+      const axis = normalize([0, 1, 2].map((i) => eig.vectors[i][order[0]]));
+      return { axis, eigenvalues: values, center };
+    }
+
+    function jacobiEigenSymmetric3(input) {
+      const a = input.map((row) => row.slice());
+      const vectors = [
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1]
+      ];
+
+      for (let iter = 0; iter < 40; iter += 1) {
+        let p = 0;
+        let q = 1;
+        let max = Math.abs(a[0][1]);
+        for (const pair of [[0, 2], [1, 2]]) {
+          const val = Math.abs(a[pair[0]][pair[1]]);
+          if (val > max) {
+            max = val;
+            p = pair[0];
+            q = pair[1];
+          }
+        }
+
+        if (max < 1e-12) {
+          break;
+        }
+
+        const tau = (a[q][q] - a[p][p]) / (2 * a[p][q]);
+        const t = Math.sign(tau || 1) / (Math.abs(tau) + Math.sqrt(1 + tau * tau));
+        const cos = 1 / Math.sqrt(1 + t * t);
+        const sin = t * cos;
+        const app = a[p][p];
+        const aqq = a[q][q];
+        const apq = a[p][q];
+
+        a[p][p] = app - t * apq;
+        a[q][q] = aqq + t * apq;
+        a[p][q] = 0;
+        a[q][p] = 0;
+
+        for (let k = 0; k < 3; k += 1) {
+          if (k !== p && k !== q) {
+            const akp = a[k][p];
+            const akq = a[k][q];
+            a[k][p] = cos * akp - sin * akq;
+            a[p][k] = a[k][p];
+            a[k][q] = sin * akp + cos * akq;
+            a[q][k] = a[k][q];
+          }
+        }
+
+        for (let k = 0; k < 3; k += 1) {
+          const vip = vectors[k][p];
+          const viq = vectors[k][q];
+          vectors[k][p] = cos * vip - sin * viq;
+          vectors[k][q] = sin * vip + cos * viq;
+        }
+      }
+
+      return {
+        values: [a[0][0], a[1][1], a[2][2]],
+        vectors
+      };
+    }
+
+    function judgeQuality({
+      rmsResidual,
+      sessionCount,
+      planeSeparationRatio,
+      angularSpanDeg,
+      standardErrorDeg,
+      outlierCount
+    }) {
+      if (sessionCount < MIN_FIT_SESSIONS + 2) {
+        return "位置数不足";
+      }
+      if (angularSpanDeg < MIN_ANGULAR_SPAN_DEG) {
+        return "転舵範囲不足";
+      }
+      if (planeSeparationRatio < MIN_PLANE_SEPARATION_RATIO) {
+        return "軸推定不安定";
+      }
+      if (outlierCount > Math.max(1, Math.floor(sessionCount * 0.25))) {
+        return "外れ値多い";
+      }
+      if (Number.isFinite(standardErrorDeg) && standardErrorDeg > WARN_STANDARD_ERROR_DEG) {
+        return "推定ばらつき大";
+      }
+      if (rmsResidual <= GOOD_RMS_RESIDUAL && outlierCount === 0) {
+        return "良好";
+      }
+      if (rmsResidual <= WARN_RMS_RESIDUAL || (Number.isFinite(standardErrorDeg) && standardErrorDeg <= WARN_STANDARD_ERROR_DEG)) {
+        return "要確認";
+      }
+      return "揺れまたは固定不良";
+    }
+
+    function renderLive() {
+      const g = state.latestGravity;
+      if (!g) {
+        return;
+      }
+
+      els.gx.textContent = fmt(g[0]);
+      els.gy.textContent = fmt(g[1]);
+      els.gz.textContent = fmt(g[2]);
+      els.gmag.textContent = fmt(mag(g));
+      els.sensorState.textContent = "取得中";
+
+      const summary = summarizeSamples(state.recent);
+      if (summary.ok) {
+        els.stillState.textContent = state.stillnessLevel.startsWith("vibration") ? "平均安定" : "静止";
+        els.stillState.className = "value good";
+        els.stillnessDetail.textContent = `方向揺れ ${summary.blockAngleRmsDeg.toFixed(2)}°・姿勢移動 ${summary.blockDriftDeg.toFixed(2)}°`;
+      } else if (summary.state === "collecting") {
+        els.stillState.textContent = "蓄積中";
+        els.stillState.className = "value";
+        els.stillnessDetail.textContent = summary.reason;
+      } else if (state.wasStill && !state.movementConfirmed) {
+        els.stillState.textContent = "保持中";
+        els.stillState.className = "value";
+        els.stillnessDetail.textContent = `${summary.reason}（同じ位置として保持）`;
+      } else {
+        els.stillState.textContent = state.movementConfirmed ? "移動" : "揺れ";
+        els.stillState.className = "value bad";
+        els.stillnessDetail.textContent = summary.reason;
+      }
+    }
+
+    function render() {
+      renderLive();
+      renderResult();
+      renderTable();
+      renderMountStatus();
+      els.pointCount.textContent = `${buildSessionRepresentatives(state.points).length} / ${state.points.length}`;
+      els.debugBtn.hidden = !state.debug;
+      els.csvBtn.disabled = state.points.length === 0;
+      els.removeBtn.disabled = state.points.length === 0;
+    }
+
+    function renderMountStatus() {
+      if (state.baselinePending) {
+        els.mountStatus.textContent = `直進基準待ち。${(getStillnessProfile().durationMs / 1000).toFixed(1)}秒安定したら自動記録`;
+        return;
+      }
+      if (!state.baseline) {
+        els.mountStatus.textContent = "1. 画面を外側へ向けて固定し、直進基準を記録";
+        return;
+      }
+      const sessionCount = buildSessionRepresentatives(state.points).length;
+      if (sessionCount < MIN_FIT_SESSIONS) {
+        els.mountStatus.textContent = `準備完了。あと ${MIN_FIT_SESSIONS - sessionCount} 位置で自動推定`;
+        return;
+      }
+      els.mountStatus.textContent = "準備完了。静止ごとに2回取得して1位置に集約";
+    }
+
+    function renderResult() {
+      const result = state.result;
+      els.caster.textContent = result ? fmtDeg(result.casterDeg) : "--";
+      els.sai.textContent = result ? fmtDeg(result.saiDeg) : "--";
+      els.rms.textContent = result ? fmt(result.rmsResidual, 4) : "--";
+      els.quality.textContent = result ? stabilityLabel(result) : "--";
+      els.uncertainty.textContent = result && Number.isFinite(result.uncertainty95Deg) ? `SE${result.standardErrorDeg.toFixed(2)} ±${result.uncertainty95Deg.toFixed(2)}°` : "--";
+      els.quality.className = `value ${result && stabilityLabel(result) === "安定" ? "good" : ""}`;
+      els.uncertainty.className = `value ${result && Number.isFinite(result.standardErrorDeg) && result.standardErrorDeg <= GOOD_STANDARD_ERROR_DEG ? "good" : ""}`;
+    }
+
+    function stabilityLabel(result) {
+      if (!Number.isFinite(result.standardErrorDeg)) {
+        return result.quality;
+      }
+      if (result.quality === "良好" && result.standardErrorDeg <= GOOD_STANDARD_ERROR_DEG && result.rmsResidual <= GOOD_RMS_RESIDUAL) {
+        return "安定";
+      }
+      if (result.standardErrorDeg <= WARN_STANDARD_ERROR_DEG && result.rmsResidual <= WARN_RMS_RESIDUAL) {
+        return "要確認";
+      }
+      return "不安定";
+    }
+
+    function renderTable() {
+      const rows = [];
+      if (state.baseline) {
+        rows.push(pointRow(state.baseline, 0, true));
+      }
+      const start = Math.max(0, state.points.length - MAX_RENDERED_POINT_ROWS);
+      state.points.slice(start).forEach((point, index) => rows.push(pointRow(point, start + index + 1, false)));
+      els.pointRows.innerHTML = rows.join("");
+    }
+
+    function pointRow(point, index, isBaseline) {
+      const maxStd = Math.max(...point.axisStd);
+      const used = isBaseline ? "基準" : point.usedForFit ? "yes" : "no";
+      return `
+        <tr>
+          <td>${index}</td>
+          <td>${escapeHtml(isBaseline ? "基準" : point.sessionId || "-")}</td>
+          <td>${escapeHtml(point.pointType)}</td>
+          <td>${fmt(point.normalized[0])}</td>
+          <td>${fmt(point.normalized[1])}</td>
+          <td>${fmt(point.normalized[2])}</td>
+          <td>${point.sampleCount}</td>
+          <td>${fmt(maxStd, 4)}</td>
+          <td>${used}</td>
+        </tr>
+      `;
+    }
+
+    function escapeHtml(text) {
+      return String(text).replace(/[&<>"']/g, (ch) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#039;"
+      }[ch]));
+    }
+
+    function setStatus(message, type = "") {
+      els.status.textContent = message;
+      els.status.className = `status ${type}`.trim();
+    }
+
+    function removeLastPoint() {
+      state.points.pop();
+      state.result = null;
+      updateFitIfReady();
+      state.lastCapturedDirection = state.points.length > 0
+        ? state.points[state.points.length - 1].normalized.slice()
+        : null;
+      state.lastAutoAddAt = performance.now();
+      setStatus("最後の測定点を削除しました。");
+      render();
+    }
+
+    function clearPoints() {
+      state.points = [];
+      state.baseline = null;
+      state.result = null;
+      state.autoAddEnabled = false;
+      state.baselinePending = false;
+      state.lastAutoAddAt = 0;
+      state.unstableSince = null;
+      state.lastCapturedDirection = null;
+      state.movementConfirmed = false;
+      state.wasStill = false;
+      state.stillSessionPointCount = 0;
+      state.activeStillSessionId = null;
+      state.nextSessionId = 1;
+      state.screenOutNormal = v(0, 0, 1);
+      releaseWakeLock();
+      setStatus("全測定点をクリアしました。");
+      render();
+    }
+
+    function exportCsv() {
+      const lines = [];
+      lines.push([
+        "point_index",
+        "session_id",
+        "point_type",
+        "timestamp",
+        "gx_raw_mean",
+        "gy_raw_mean",
+        "gz_raw_mean",
+        "gx_normalized",
+        "gy_normalized",
+        "gz_normalized",
+        "sample_count",
+        "std_x",
+        "std_y",
+        "std_z",
+        "std_magnitude",
+        "stillness_level",
+        "sample_span_ms",
+        "average_block_count",
+        "block_angle_rms_deg",
+        "block_drift_deg",
+        "block_magnitude_std",
+        "used_for_fit",
+        "fit_weight",
+        "excluded_reason"
+      ].join(","));
+
+      const allPoints = state.baseline ? [state.baseline, ...state.points] : state.points;
+      const sessionWeights = new Map();
+      if (state.result) {
+        state.result.sessionIds.forEach((sessionId, index) => {
+          sessionWeights.set(sessionId, state.result.weights[index]);
+        });
+      }
+      allPoints.forEach((point, index) => {
+        lines.push(csvRow([
+          index,
+          point.sessionId || (index === 0 && state.baseline ? "BASE" : ""),
+          point.pointType,
+          point.timestamp,
+          ...point.rawMean,
+          ...point.normalized,
+          point.sampleCount,
+          ...point.axisStd,
+          point.magStd,
+          point.stillnessLevel || "debug",
+          point.sampleSpanMs ?? "",
+          point.blockCount ?? "",
+          point.blockAngleRmsDeg ?? "",
+          point.blockDriftDeg ?? "",
+          point.blockMagStd ?? "",
+          index === 0 && state.baseline ? "baseline" : point.usedForFit,
+          sessionWeights.get(point.sessionId) ?? "",
+          point.excludedReason || ""
+        ]));
+      });
+
+      if (state.result) {
+        lines.push("");
+        lines.push(csvRow([
+          "caster_deg_abs",
+          "kingpin_angle_equiv_deg_abs",
+          "caster_deg_signed",
+          "kingpin_angle_equiv_deg_signed",
+          "steering_axis_x",
+          "steering_axis_y",
+          "steering_axis_z",
+          "vertical_x",
+          "vertical_y",
+          "vertical_z",
+          "lateral_x",
+          "lateral_y",
+          "lateral_z",
+          "forward_x",
+          "forward_y",
+          "forward_z",
+          "rms_residual",
+          "max_residual",
+          "eigenvalue_0",
+          "eigenvalue_1",
+          "eigenvalue_2",
+          "raw_capture_count",
+          "session_count",
+          "effective_session_count",
+          "angular_span_deg",
+          "plane_separation_ratio",
+          "robust_outlier_count",
+          "caster_standard_error_deg",
+          "caster_uncertainty_95_deg",
+          "stability",
+          "quality"
+        ]));
+        lines.push(csvRow([
+          state.result.casterDeg,
+          state.result.saiDeg,
+          state.result.casterSignedDeg,
+          state.result.saiSignedDeg,
+          ...state.result.axis,
+          ...state.result.verticalUp,
+          ...state.result.lateral,
+          ...state.result.forward,
+          state.result.rmsResidual,
+          state.result.maxResidual,
+          ...state.result.eigenvalues,
+          state.result.rawPointCount,
+          state.result.pointCount,
+          state.result.effectivePointCount,
+          state.result.angularSpanDeg,
+          state.result.planeSeparationRatio,
+          state.result.outlierCount,
+          state.result.standardErrorDeg,
+          state.result.uncertainty95Deg,
+          stabilityLabel(state.result),
+          state.result.quality
+        ]));
+      }
+
+      const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `caster-gauge-${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function csvRow(values) {
+      return values.map((value) => {
+        const text = Number.isFinite(value) ? String(value) : String(value ?? "");
+        return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+      }).join(",");
+    }
+
+    function addDebugData(includeOutlier = false) {
+      state.nextSessionId = 1;
+      state.baseline = makePoint(v(0, 0, 9.81), "直進基準", "BASE");
+      state.points = [];
+
+      const frame = getFrame();
+      const caster = 5 * Math.PI / 180;
+      const sai = 2 * Math.PI / 180;
+      let axis = normalize(add(frame.verticalUp, add(scale(frame.forward, Math.tan(caster)), scale(frame.lateral, Math.tan(sai)))));
+      if (dot(axis, frame.verticalUp) < 0) {
+        axis = scale(axis, -1);
+      }
+
+      const straightGravity = state.baseline.normalized;
+      [-32, -20, -10, 0, 10, 20, 32].forEach((deg) => {
+        const rad = deg * Math.PI / 180;
+        const sessionId = createSessionId("D");
+        for (let capture = 0; capture < 2; capture += 1) {
+          const rotated = rotateAroundAxis(straightGravity, axis, rad);
+          const noise = v(
+            Math.sin((deg + 41) * (capture + 1)) * 0.00025,
+            Math.cos((deg - 13) * (capture + 2)) * 0.00025,
+            Math.sin((deg + 7) * (capture + 3)) * 0.00025
+          );
+          const g = normalize(add(rotated, noise));
+          state.points.push(makePoint(scale(g, 9.81), deg < 0 ? "左" : deg > 0 ? "右" : "直進", sessionId));
+        }
+      });
+
+      if (includeOutlier) {
+        const sessionId = createSessionId("X");
+        const rotated = rotateAroundAxis(straightGravity, axis, 15 * Math.PI / 180);
+        const axisTangent = normalize(sub(axis, scale(rotated, dot(axis, rotated))));
+        const outlier = normalize(add(rotated, scale(axisTangent, 0.08)));
+        state.points.push(makePoint(scale(outlier, 9.81), "外れ値テスト", sessionId));
+        state.points.push(makePoint(scale(outlier, 9.81), "外れ値テスト", sessionId));
+      }
+
+      state.result = null;
+      updateFitIfReady();
+      setStatus(includeOutlier
+        ? `外れ値を含む模擬データを追加しました（検出 ${state.result ? state.result.outlierCount : 0} 位置）。`
+        : "模擬データを追加し、推定結果を更新しました。");
+      render();
+    }
+
+    function runVibrationDebugTest() {
+      state.stillnessLevel = "vibrationHigh";
+      els.stillnessLevel.value = state.stillnessLevel;
+      const profile = getStillnessProfile();
+      const sampleCount = 301;
+      const startTime = performance.now() - profile.durationMs;
+      const makeSamples = (withDrift) => Array.from({ length: sampleCount }, (_, index) => {
+        const progress = index / (sampleCount - 1);
+        const seconds = progress * profile.durationMs / 1000;
+        const phase = 2 * Math.PI * 12 * seconds;
+        const tilt = withDrift ? progress * 2 * Math.PI / 180 : 0;
+        return {
+          t: startTime + progress * profile.durationMs,
+          g: v(
+            9.81 * Math.sin(tilt) + 1.50 * Math.sin(phase),
+            0.80 * Math.cos(phase * 1.5),
+            9.81 * Math.cos(tilt) + 1.20 * Math.sin(phase + 0.7)
+          )
+        };
+      });
+
+      const vibrationOnly = makeSamples(false);
+      const vibrationAndMovement = makeSamples(true);
+      const stableResult = summarizeSamples(vibrationOnly);
+      const movingResult = summarizeSamples(vibrationAndMovement);
+      state.recent = vibrationOnly;
+      state.latestGravity = vibrationOnly[vibrationOnly.length - 1].g;
+      state.sensorReady = true;
+      setStatus(`振動平均テスト: 振動のみ=${stableResult.ok ? "OK" : "NG"} / 2度移動=${movingResult.ok ? "誤受理" : "除外"}`);
+      render();
+    }
+
+    function runHysteresisDebugTest() {
+      state.stillnessLevel = "standard";
+      els.stillnessLevel.value = state.stillnessLevel;
+      const makeDirection = (angleDeg) => {
+        const angle = angleDeg * Math.PI / 180;
+        return v(Math.sin(angle), 0, Math.cos(angle));
+      };
+      const testSummary = (angleDeg) => ({ state: "moving", normalized: makeDirection(angleDeg) });
+
+      state.wasStill = true;
+      state.lastCapturedDirection = makeDirection(0);
+      state.unstableSince = 0;
+      state.movementConfirmed = false;
+      const samePositionRearmed = updateMovementRearm(testSummary(0.05), 1000);
+
+      state.wasStill = true;
+      state.stillSessionPointCount = 2;
+      state.activeStillSessionId = "TEST";
+      state.unstableSince = 0;
+      state.movementConfirmed = false;
+      const movedPositionRearmed = updateMovementRearm(testSummary(0.50), 1000);
+
+      setStatus(`再アームテスト: 同位置=${samePositionRearmed ? "誤作動" : "保持"} / 0.5度移動=${movedPositionRearmed ? "再アーム" : "失敗"}`);
+      render();
+    }
+
+    function rotateAroundAxis(point, axis, angle) {
+      return add(
+        add(scale(point, Math.cos(angle)), scale(cross(axis, point), Math.sin(angle))),
+        scale(axis, dot(axis, point) * (1 - Math.cos(angle)))
+      );
+    }
+
+    function makePoint(raw, pointType, sessionId = createSessionId()) {
+      return {
+        rawMean: raw,
+        normalized: normalize(raw),
+        sampleCount: 60,
+        axisStd: [0.01, 0.01, 0.01],
+        magStd: 0.02,
+        timestamp: new Date().toISOString(),
+        pointType,
+        sessionId,
+        usedForFit: true,
+        excludedReason: ""
+      };
+    }
+
+    function reflectCasterResult() {
+      if (!state.result) {
+        setStatus("反映できるキャスター測定結果がまだありません。", "warn");
+        return;
+      }
+      const target = new URLSearchParams(location.search).get("target") || localStorage.getItem("casterGaugeTarget") || "flCaster";
+      localStorage.setItem("casterGaugeResult", JSON.stringify({
+        target,
+        casterDeg: state.result.casterDeg,
+        casterSignedDeg: state.result.casterSignedDeg,
+        saiDeg: state.result.saiDeg,
+        quality: stabilityLabel(state.result),
+        uncertainty95Deg: state.result.uncertainty95Deg,
+        pointCount: state.result.pointCount,
+        at: new Date().toISOString()
+      }));
+      location.href = "index.html";
+    }
+
+    [els.permissionBtn, els.baselineBtn, els.sampleBtn, els.removeBtn, els.clearBtn, els.csvBtn, els.debugBtn, document.getElementById("reflectBtn")].forEach((button) => {
+      button.addEventListener("click", ensureAudio);
+    });
+    els.permissionBtn.addEventListener("click", requestSensors);
+    els.baselineBtn.addEventListener("click", recordBaseline);
+    els.sampleBtn.addEventListener("click", addPoint);
+    els.removeBtn.addEventListener("click", removeLastPoint);
+    els.clearBtn.addEventListener("click", clearPoints);
+    els.csvBtn.addEventListener("click", exportCsv);
+    document.getElementById("reflectBtn").addEventListener("click", reflectCasterResult);
+    els.debugBtn.addEventListener("click", () => addDebugData(false));
+    els.stillnessLevel.addEventListener("change", () => {
+      const keepCurrentPositionLocked = Boolean(state.lastCapturedDirection);
+      state.stillnessLevel = els.stillnessLevel.value;
+      state.recent = [];
+      state.unstableSince = null;
+      state.movementConfirmed = false;
+      state.wasStill = keepCurrentPositionLocked;
+      state.stillSessionPointCount = keepCurrentPositionLocked ? AUTO_ADD_POINTS_PER_STILL_SESSION : 0;
+      state.activeStillSessionId = null;
+      state.lastAutoAddAt = 0;
+      setStatus(`${els.stillnessLevel.selectedOptions[0].textContent}へ変更しました。新しい判定用データを蓄積します。`);
+      render();
+    });
+    [els.reverseForward].forEach((el) => {
+      el.addEventListener("change", () => {
+        state.result = null;
+        updateFitIfReady();
+        render();
+      });
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && (state.autoAddEnabled || state.baselinePending)) {
+        requestWakeLock();
+      }
+    });
+
+    render();
+    if (DEBUG_MODE === "auto" || DEBUG_MODE === "outlier") {
+      addDebugData(DEBUG_MODE === "outlier");
+    } else if (DEBUG_MODE === "vibration") {
+      runVibrationDebugTest();
+    } else if (DEBUG_MODE === "hysteresis") {
+      runHysteresisDebugTest();
+    }
+  </script>
+</body>
+</html>
