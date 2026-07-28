@@ -317,6 +317,7 @@
       grid-template-columns: 1fr 1fr;
       gap: 10px;
     }
+    .seg.is-hidden { display: none; }
     .seg .active { background: var(--green); }
     .nudge {
       display: grid;
@@ -459,9 +460,9 @@
   <dialog id="inputDialog"><div class="modal">
     <h2 id="inputTitle"></h2>
     <div class="form">
-      <div class="seg" id="toeDir" hidden>
-        <button class="btn" data-dir="in">In</button>
-        <button class="btn" data-dir="out">Out</button>
+      <div class="seg is-hidden" id="valueDir">
+        <button class="btn" data-dir="negative">Out</button>
+        <button class="btn" data-dir="positive">In</button>
       </div>
       <label><span id="inputLabel">値</span><input id="inputValue" type="number" inputmode="decimal" step="0.1"></label>
       <div class="nudge"><button class="btn" data-nudge="-1">-1.0</button><button class="btn" data-nudge="-0.1">-0.1</button><button class="btn" data-nudge="0.1">+0.1</button><button class="btn" data-nudge="1">+1.0</button></div>
@@ -526,7 +527,7 @@
       memo: MEMO_TEMPLATE
     };
     let editingKey = null;
-    let currentToeDir = "in";
+    let currentValueDir = "positive";
     const $ = (id) => document.getElementById(id);
 
     function tireDiameter(axle) {
@@ -613,20 +614,26 @@
       const meta = fields[key];
       $("inputTitle").textContent = meta.label;
       $("inputLabel").textContent = `値 (${meta.unit})`;
-      $("toeDir").hidden = !meta.toe;
-      currentToeDir = val(key) < 0 ? "out" : "in";
+      $("valueDir").classList.toggle("is-hidden", !(meta.toe || meta.camber));
+      currentValueDir = val(key) < 0 ? "negative" : "positive";
       $("inputValue").value = Number.isFinite(val(key)) ? Math.abs(val(key)).toFixed(meta.caster ? 2 : 1) : "";
-      updateToeDir();
+      updateValueDir(meta);
       $("inputDialog").showModal();
     }
-    function updateToeDir() {
-      document.querySelectorAll("[data-dir]").forEach((button) => button.classList.toggle("active", button.dataset.dir === currentToeDir));
+    function updateValueDir(meta = fields[editingKey]) {
+      const positiveLabel = meta?.camber ? "Pos" : "In";
+      const negativeLabel = meta?.camber ? "Neg" : "Out";
+      const positiveButton = document.querySelector('[data-dir="positive"]');
+      const negativeButton = document.querySelector('[data-dir="negative"]');
+      positiveButton.textContent = positiveLabel;
+      negativeButton.textContent = negativeLabel;
+      document.querySelectorAll("[data-dir]").forEach((button) => button.classList.toggle("active", button.dataset.dir === currentValueDir));
     }
     function applyInput() {
       const meta = fields[editingKey];
       const raw = Number($("inputValue").value);
       if (!Number.isFinite(raw)) return;
-      const value = meta.toe ? (currentToeDir === "out" ? -Math.abs(raw) : Math.abs(raw)) : raw;
+      const value = meta.toe || meta.camber ? (currentValueDir === "negative" ? -Math.abs(raw) : Math.abs(raw)) : raw;
       state.values[editingKey] = { value, meta: meta.caster ? "手入力" : "", at: new Date().toISOString() };
       $("inputDialog").close();
       render();
@@ -769,8 +776,8 @@
       openInput(key);
     }));
     document.querySelectorAll("[data-dir]").forEach((button) => button.addEventListener("click", () => {
-      currentToeDir = button.dataset.dir;
-      updateToeDir();
+      currentValueDir = button.dataset.dir;
+      updateValueDir();
     }));
     document.querySelectorAll("[data-nudge]").forEach((button) => button.addEventListener("click", () => {
       $("inputValue").value = ((Number($("inputValue").value) || 0) + Number(button.dataset.nudge)).toFixed(1);
