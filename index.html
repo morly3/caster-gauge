@@ -615,7 +615,8 @@
       $("inputTitle").textContent = meta.label;
       $("inputLabel").textContent = `値 (${meta.unit})`;
       $("valueDir").classList.toggle("is-hidden", !(meta.toe || meta.camber));
-      currentValueDir = val(key) < 0 ? "negative" : "positive";
+      const currentValue = val(key);
+      currentValueDir = Number.isFinite(currentValue) ? (currentValue < 0 ? "negative" : "positive") : (meta.camber ? "negative" : "positive");
       $("inputValue").value = Number.isFinite(val(key)) ? Math.abs(val(key)).toFixed(meta.caster ? 2 : 1) : "";
       updateValueDir(meta);
       $("inputDialog").showModal();
