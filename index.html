@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>簡易アライメントゲージ用記録ツール v0.1.0</title>
+  <title>簡易アライメントゲージ用記録ツール v0.2.0</title>
   <style>
     :root {
       --bg: #000;
@@ -100,7 +100,11 @@
     }
     .toe-row .stack { gap: 22px; }
     .toe-spacer {
-      min-height: 116px;
+      display: none;
+    }
+    .cell[data-key$="Pressure"] {
+      width: 78%;
+      justify-self: center;
     }
     .cell {
       min-height: 78px;
@@ -204,7 +208,7 @@
       font-size: 14px;
     }
     .toe-center {
-      min-height: 420px;
+      min-height: 0;
       border: 2px solid #09b66a;
       border-radius: 5px;
       background: #fff;
@@ -215,6 +219,7 @@
       grid-template-rows: auto 1fr auto;
       gap: 8px;
       align-items: center;
+      align-self: start;
     }
     .toe-summary {
       text-align: center;
@@ -235,13 +240,18 @@
     }
     .toe-summary .converted-value {
       color: #111;
-      font-size: 24px;
+      font-size: 18px;
+    }
+    .toe-summary.rear-summary {
+      transform: translateY(-120px);
+      margin-bottom: -120px;
     }
     .toe-svg {
       display: block;
       width: 100%;
       height: 340px;
       overflow: visible;
+      transform: translateY(-40px);
     }
     .toe-svg text {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -333,13 +343,19 @@
       .toe-row .cell-title { font-size: 11px; }
       .toe-row .cell-main { font-size: 16px; }
       .toe-row .cell-sub { font-size: 12px; }
-      .toe-spacer { min-height: 104px; }
-      .toe-center { min-height: 400px; }
+      .toe-center { min-height: 0; }
       .toe-summary { min-height: 74px; }
       .toe-summary .label { font-size: 14px; }
       .toe-summary .total-value { font-size: 21px; }
-      .toe-summary .converted-value { font-size: 20px; }
-      .toe-svg { height: 330px; }
+      .toe-summary .converted-value { font-size: 16px; }
+      .toe-summary.rear-summary {
+        transform: translateY(-112px);
+        margin-bottom: -112px;
+      }
+      .toe-svg {
+        height: 330px;
+        transform: translateY(-36px);
+      }
       .btn { min-height: 40px; }
       .caster-icon { transform: scale(.72); }
     }
@@ -348,7 +364,7 @@
 <body>
   <main class="app">
     <header>
-      <h1><a href="https://note.com/mk_morly/n/na2ac85d692a2" target="_blank" rel="noopener noreferrer">アライメントゲージの説明はこちら</a> v 0.1.0</h1>
+      <h1><a href="https://note.com/mk_morly/n/na2ac85d692a2" target="_blank" rel="noopener noreferrer">アライメントゲージの説明はこちら</a> v 0.2.0</h1>
     </header>
 
     <div class="date">計測日時　<span id="measuredAt"></span></div>
@@ -358,7 +374,7 @@
     </section>
 
     <section class="band caster">
-      <div class="row toe-row">
+      <div class="row">
         <button class="cell" data-key="flCaster"><span class="cell-title">FL キャスター</span><span class="cell-main" id="flCasterMain">--</span><span class="cell-sub muted" id="flCasterSub">未測定</span></button>
         <div class="axle"><div class="caster-icon"><div class="caster-disc"></div><div class="caster-gauge"></div></div></div>
         <button class="cell" data-key="frCaster"><span class="cell-title">FR キャスター</span><span class="cell-main" id="frCasterMain">--</span><span class="cell-sub muted" id="frCasterSub">未測定</span></button>
@@ -377,7 +393,9 @@
       <div class="row">
         <div class="stack">
           <button class="cell" data-key="flToe"><span class="cell-title">FL トー</span><span class="cell-main" id="flToeMain">--</span><span class="cell-sub" id="flToeSub">換算 --</span></button>
+          <button class="cell" data-key="flPressure"><span class="cell-title">FL タイヤ空気圧</span><span class="cell-main" id="flPressureMain">--</span></button>
           <button class="cell" data-key="leftWheelbase"><span class="cell-title">L ホイールベース</span><span class="cell-main" id="leftWheelbaseMain">--</span></button>
+          <button class="cell" data-key="rlPressure"><span class="cell-title">RL タイヤ空気圧</span><span class="cell-main" id="rlPressureMain">--</span></button>
           <div class="toe-spacer" aria-hidden="true"></div>
           <button class="cell" data-key="rlToe"><span class="cell-title">RL トー</span><span class="cell-main" id="rlToeMain">--</span><span class="cell-sub" id="rlToeSub">換算 --</span></button>
         </div>
@@ -394,18 +412,18 @@
             <line x1="134" y1="86" x2="174" y2="86" stroke="#fff" stroke-width="2" stroke-dasharray="2 2"></line>
 
             <text x="90" y="26" font-size="24" fill="#111">Front</text>
-            <path d="M90 82 L60 114 H76 V166 H104 V114 H120 Z" fill="#fff" stroke="#17284e" stroke-width="5"></path>
+            <path d="M90 38 L60 70 H76 V122 H104 V70 H120 Z" fill="#fff" stroke="#17284e" stroke-width="5"></path>
 
-            <text x="90" y="210" font-size="18" fill="#111">ホイールベース</text>
-            <text x="90" y="238" font-size="20" fill="#111">左右差 <tspan id="wheelbaseDiff">--</tspan></text>
+            <text x="90" y="154" font-size="18" fill="#111">ホイールベース</text>
+            <text x="90" y="182" font-size="20" fill="#111">左右差 <tspan id="wheelbaseDiff">--</tspan></text>
 
             <rect x="6" y="222" width="40" height="84" rx="9" fill="#101827"></rect>
             <rect x="134" y="222" width="40" height="84" rx="9" fill="#101827"></rect>
             <line x1="6" y1="264" x2="46" y2="264" stroke="#fff" stroke-width="2" stroke-dasharray="2 2"></line>
             <line x1="134" y1="264" x2="174" y2="264" stroke="#fff" stroke-width="2" stroke-dasharray="2 2"></line>
-            <text x="90" y="344" font-size="24" fill="#111">Rear</text>
+            <text x="90" y="296" font-size="24" fill="#111">Rear</text>
           </svg>
-          <div class="toe-summary">
+          <div class="toe-summary rear-summary">
             <div class="label">トータルトー</div>
             <div class="total-value" id="rearTotalToe">--</div>
             <div class="converted-value" id="rearTotalToeSub">換算 --</div>
@@ -413,7 +431,9 @@
         </div>
         <div class="stack">
           <button class="cell" data-key="frToe"><span class="cell-title">FR トー</span><span class="cell-main" id="frToeMain">--</span><span class="cell-sub" id="frToeSub">換算 --</span></button>
+          <button class="cell" data-key="frPressure"><span class="cell-title">FR タイヤ空気圧</span><span class="cell-main" id="frPressureMain">--</span></button>
           <button class="cell" data-key="rightWheelbase"><span class="cell-title">R ホイールベース</span><span class="cell-main" id="rightWheelbaseMain">--</span></button>
+          <button class="cell" data-key="rrPressure"><span class="cell-title">RR タイヤ空気圧</span><span class="cell-main" id="rrPressureMain">--</span></button>
           <div class="toe-spacer" aria-hidden="true"></div>
           <button class="cell" data-key="rrToe"><span class="cell-title">RR トー</span><span class="cell-main" id="rrToeMain">--</span><span class="cell-sub" id="rrToeSub">換算 --</span></button>
         </div>
@@ -473,6 +493,9 @@
     const DB_NAME = "simple-alignment-gauge";
     const STORE_NAME = "records";
     const GAUGE_LENGTH = 300;
+    const MEMO_TEMPLATE = `車両名：
+調整内容：
+結果：`;
     const fields = {
       flCaster: { label: "FL キャスター", unit: "deg", caster: true },
       frCaster: { label: "FR キャスター", unit: "deg", caster: true },
@@ -484,6 +507,10 @@
       frToe: { label: "FR トー", unit: "mm", toe: true, axle: "front" },
       rlToe: { label: "RL トー", unit: "mm", toe: true, axle: "rear" },
       rrToe: { label: "RR トー", unit: "mm", toe: true, axle: "rear" },
+      flPressure: { label: "FL タイヤ空気圧", unit: "kPa", pressure: true },
+      frPressure: { label: "FR タイヤ空気圧", unit: "kPa", pressure: true },
+      rlPressure: { label: "RL タイヤ空気圧", unit: "kPa", pressure: true },
+      rrPressure: { label: "RR タイヤ空気圧", unit: "kPa", pressure: true },
       leftWheelbase: { label: "L ホイールベース", unit: "mm" },
       rightWheelbase: { label: "R ホイールベース", unit: "mm" }
     };
@@ -496,7 +523,7 @@
         rear: { width: 255, aspect: 35, rim: 18 }
       },
       values: {},
-      memo: ""
+      memo: MEMO_TEMPLATE
     };
     let editingKey = null;
     let currentToeDir = "in";
@@ -560,6 +587,8 @@
         } else if (meta.toe) {
           setMain(key, toeText(value), value < 0);
           $(`${key}Sub`).textContent = toeConverted(value, meta.axle);
+        } else if (meta.pressure) {
+          setMain(key, `${value.toFixed(0)} kPa`);
         } else {
           setMain(key, mm(value, 0));
         }
@@ -649,7 +678,7 @@
       state.id = crypto.randomUUID();
       state.measuredAt = new Date().toISOString();
       state.values = {};
-      state.memo = "";
+      state.memo = MEMO_TEMPLATE;
       render();
     }
     function openDb() {
