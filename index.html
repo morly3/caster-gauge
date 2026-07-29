@@ -301,6 +301,24 @@
       font-size: 13px;
       font-weight: 850;
     }
+    .diameter-readout {
+      border: 1px solid #cdd6e2;
+      border-radius: 8px;
+      background: #f4f7fb;
+      color: #111;
+      padding: 10px 12px;
+    }
+    .diameter-readout span {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 850;
+    }
+    .diameter-readout b {
+      font-size: 18px;
+      line-height: 1.2;
+    }
     input, select {
       width: 100%;
       min-height: 42px;
@@ -477,9 +495,11 @@
       <label><span>フロント 幅</span><input id="frontWidth" type="text" inputmode="numeric" pattern="[0-9]*"></label>
       <label><span>フロント 扁平率</span><input id="frontAspect" type="text" inputmode="numeric" pattern="[0-9]*"></label>
       <label><span>フロント ホイールリム外径</span><input id="frontRim" type="text" inputmode="numeric" pattern="[0-9]*"></label>
+      <div class="diameter-readout"><span>フロントタイヤの外径</span><b id="frontDiameter">--</b></div>
       <label><span>リア 幅</span><input id="rearWidth" type="text" inputmode="numeric" pattern="[0-9]*"></label>
       <label><span>リア 扁平率</span><input id="rearAspect" type="text" inputmode="numeric" pattern="[0-9]*"></label>
       <label><span>リア ホイールリム外径</span><input id="rearRim" type="text" inputmode="numeric" pattern="[0-9]*"></label>
+      <div class="diameter-readout"><span>リアタイヤの外径</span><b id="rearDiameter">--</b></div>
     </div>
     <div class="modal-actions" style="margin-top:16px"><button class="btn" id="cancelSettings">キャンセル</button><button class="btn primary" id="applySettings">保存</button></div>
   </div></dialog>
@@ -677,7 +697,20 @@
         $(axle + "Aspect").value = state.settings[axle].aspect;
         $(axle + "Rim").value = state.settings[axle].rim;
       });
+      updateDiameterReadouts();
       $("settingsDialog").showModal();
+    }
+    function tireDiameterFromInputs(axle) {
+      const width = numericText($(axle + "Width").value, NaN);
+      const aspect = numericText($(axle + "Aspect").value, NaN);
+      const rim = numericText($(axle + "Rim").value, NaN);
+      return width * aspect / 100 * 2 + rim * 25.4;
+    }
+    function updateDiameterReadouts() {
+      ["front", "rear"].forEach((axle) => {
+        const diameter = tireDiameterFromInputs(axle);
+        $(`${axle}Diameter`).textContent = Number.isFinite(diameter) ? `${diameter.toFixed(1)} mm` : "--";
+      });
     }
     function applySettings() {
       state.settings.toeUnit = $("toeUnit").value;
@@ -690,6 +723,7 @@
       });
       $("settingsDialog").close();
       saveDraft();
+      updateDiameterReadouts();
       render();
     }
     function numericText(value, fallback) {
@@ -811,6 +845,11 @@
     $("settingsBtn").addEventListener("click", openSettings);
     $("applySettings").addEventListener("click", applySettings);
     $("cancelSettings").addEventListener("click", () => $("settingsDialog").close());
+    ["front", "rear"].forEach((axle) => {
+      ["Width", "Aspect", "Rim"].forEach((part) => {
+        $(axle + part).addEventListener("input", updateDiameterReadouts);
+      });
+    });
     $("memo").addEventListener("input", () => {
       state.memo = $("memo").value;
       saveDraft();
