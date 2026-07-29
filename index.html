@@ -493,6 +493,7 @@
   <script>
     const DB_NAME = "simple-alignment-gauge";
     const STORE_NAME = "records";
+    const DRAFT_KEY = "casterGaugeDraft";
     const GAUGE_LENGTH = 300;
     const MEMO_TEMPLATE = `車両名：
 調整内容：
@@ -637,7 +638,22 @@
       const value = meta.toe || meta.camber ? (currentValueDir === "negative" ? -Math.abs(raw) : Math.abs(raw)) : raw;
       state.values[editingKey] = { value, meta: meta.caster ? "手入力" : "", at: new Date().toISOString() };
       $("inputDialog").close();
+      saveDraft();
       render();
+    }
+    function saveDraft() {
+      state.memo = $("memo").value;
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(JSON.parse(JSON.stringify(state))));
+    }
+    function restoreDraft() {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      try {
+        const draft = JSON.parse(raw);
+        if (draft && typeof draft === "object") Object.assign(state, draft);
+      } catch {
+        localStorage.removeItem(DRAFT_KEY);
+      }
     }
     function applyCasterResult() {
       const raw = localStorage.getItem("casterGaugeResult");
@@ -651,6 +667,7 @@
         at: result.at || new Date().toISOString()
       };
       localStorage.removeItem("casterGaugeResult");
+      saveDraft();
       render();
     }
     function openSettings() {
@@ -672,6 +689,7 @@
         };
       });
       $("settingsDialog").close();
+      saveDraft();
       render();
     }
     function numericText(value, fallback) {
@@ -687,6 +705,7 @@
       state.measuredAt = new Date().toISOString();
       state.values = {};
       state.memo = MEMO_TEMPLATE;
+      localStorage.removeItem(DRAFT_KEY);
       render();
     }
     function openDb() {
@@ -706,6 +725,7 @@
         tx.oncomplete = resolve;
         tx.onerror = () => reject(tx.error);
       });
+      saveDraft();
       alert("測定結果を保存しました。");
     }
     async function allRecords() {
@@ -732,6 +752,7 @@
       if (!record) return;
       Object.assign(state, record);
       $("listDialog").close();
+      saveDraft();
       render();
     }
     async function deleteRecord(id) {
@@ -771,6 +792,7 @@
       const key = button.dataset.key;
       if (fields[key].caster) {
         localStorage.setItem("casterGaugeTarget", key);
+        saveDraft();
         location.href = `caster.html?target=${encodeURIComponent(key)}`;
         return;
       }
@@ -789,7 +811,10 @@
     $("settingsBtn").addEventListener("click", openSettings);
     $("applySettings").addEventListener("click", applySettings);
     $("cancelSettings").addEventListener("click", () => $("settingsDialog").close());
-    $("memo").addEventListener("input", () => state.memo = $("memo").value);
+    $("memo").addEventListener("input", () => {
+      state.memo = $("memo").value;
+      saveDraft();
+    });
     $("saveBtn").addEventListener("click", saveRecord);
     $("listBtn").addEventListener("click", showList);
     $("closeList").addEventListener("click", () => $("listDialog").close());
@@ -802,6 +827,7 @@
     });
     window.addEventListener("pageshow", applyCasterResult);
     window.addEventListener("storage", applyCasterResult);
+    restoreDraft();
     render();
     applyCasterResult();
   </script>
