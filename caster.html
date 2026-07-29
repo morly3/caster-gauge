@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Caster Gauge v0.5.4 - 2026-07-17</title>
+  <title>Caster Gauge v0.6.0 - 2026-07-17</title>
   <style>
     :root {
       --bg: #0b0f14;
@@ -201,6 +201,13 @@
       min-height: 16px;
     }
 
+    .next-action {
+      font-size: 20px;
+      font-weight: 800;
+      line-height: 1.35;
+      color: var(--text);
+    }
+
     .status.warn {
       color: var(--warn);
     }
@@ -376,7 +383,7 @@
 </head>
 <body>
   <header>
-    <h1>Caster Gauge v0.5.4</h1>
+    <h1>Caster Gauge v0.6.0</h1>
     <a class="header-link" href="https://note.com/mk_morly/n/na2ac85d692a2" target="_blank" rel="noopener noreferrer">解説記事 ↗</a>
     <div class="sub">更新日: 2026-07-17</div>
     <div class="sub">重力ベクトルの平面フィットでステアリング軸を推定</div>
@@ -390,7 +397,7 @@
       <button id="csvBtn">CSV</button>
       <button id="removeBtn">最後を削除</button>
       <button id="clearBtn" class="danger">全クリア</button>
-      <button id="reflectBtn" class="primary">測定結果として反映</button>
+      <button id="reflectBtn">測定結果として反映</button>
       <button id="debugBtn" hidden>模擬データ</button>
     </section>
 
@@ -400,7 +407,7 @@
           <div class="settings">
             <div class="field mount-field">
               <span class="label">次の操作</span>
-              <div class="status" id="mountStatus">画面をホイール外側へ向けて立てます</div>
+              <div class="status next-action" id="mountStatus">画面をホイール外側へ向けて立てます</div>
             </div>
             <label class="field stillness-field">
               <span class="label">静止判定</span>
@@ -578,6 +585,7 @@
       points: [],
       baseline: null,
       result: null,
+      permissionGranted: false,
       sensorReady: false,
       autoAddEnabled: false,
       baselinePending: false,
@@ -837,14 +845,17 @@
         }
 
         window.addEventListener("devicemotion", onMotion, { passive: true });
+        state.permissionGranted = true;
         const locked = await requestWakeLock();
         setStatus("画面をホイール外側へ向けて固定し、直進基準を記録してください。");
         if (!locked) {
           setStatus("センサー準備完了。画面スリープ抑止はこのブラウザでは使えない可能性があります。", "warn");
         }
       } catch (err) {
+        state.permissionGranted = false;
         setStatus(`センサー許可に失敗しました: ${err.message}`, "danger");
       }
+      render();
     }
 
     function getStillnessProfile() {
@@ -1738,15 +1749,22 @@
       renderResult();
       renderTable();
       renderMountStatus();
+      renderActionButtons();
       els.pointCount.textContent = `${buildSessionRepresentatives(state.points).length} / ${state.points.length}`;
       els.debugBtn.hidden = !state.debug;
       els.csvBtn.disabled = state.points.length === 0;
       els.removeBtn.disabled = state.points.length === 0;
     }
 
+    function renderActionButtons() {
+      els.permissionBtn.classList.toggle("primary", !state.permissionGranted);
+      els.baselineBtn.classList.toggle("primary", state.permissionGranted && !state.baseline && !state.baselinePending);
+      document.getElementById("reflectBtn").classList.toggle("primary", Boolean(state.result));
+    }
+
     function renderMountStatus() {
       if (state.baselinePending) {
-        els.mountStatus.textContent = `直進基準待ち。${(getStillnessProfile().durationMs / 1000).toFixed(1)}秒安定したら自動記録`;
+        els.mountStatus.textContent = `スマホをホイールに固定したまま動かさないでください。${(getStillnessProfile().durationMs / 1000).toFixed(1)}秒安定すると直進基準を自動で記録します`;
         return;
       }
       if (!state.baseline) {
