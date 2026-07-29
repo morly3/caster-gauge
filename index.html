@@ -388,7 +388,10 @@
       <h1><a href="https://note.com/mk_morly/n/na2ac85d692a2" target="_blank" rel="noopener noreferrer">アライメントゲージの説明はこちら</a> v 0.2.0</h1>
     </header>
 
-    <div class="date">計測日時　<span id="measuredAt"></span></div>
+    <div class="date">
+      <div>計測開始　<span id="measuredAt"></span></div>
+      <div>最終更新　<span id="updatedAt"></span></div>
+    </div>
     <section class="actions">
       <button class="btn primary" id="newBtn">新規開始</button>
       <button class="btn" id="settingsBtn">タイヤサイズ設定</button>
@@ -541,6 +544,7 @@
     const state = {
       id: crypto.randomUUID(),
       measuredAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       settings: {
         toeUnit: "mm",
         front: { width: 255, aspect: 35, rim: 18 },
@@ -592,6 +596,7 @@
     }
     function render() {
       $("measuredAt").textContent = new Date(state.measuredAt).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" });
+      $("updatedAt").textContent = new Date(state.updatedAt || state.measuredAt).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" });
       $("memo").value = state.memo;
       Object.keys(fields).forEach((key) => {
         const meta = fields[key];
@@ -744,6 +749,7 @@
       if (!confirm("現在の測定を破棄して新規開始しますか？ 車両設定とタイヤサイズは維持されます。")) return;
       state.id = crypto.randomUUID();
       state.measuredAt = new Date().toISOString();
+      state.updatedAt = state.measuredAt;
       state.values = {};
       state.memo = MEMO_TEMPLATE;
       localStorage.removeItem(DRAFT_KEY);
@@ -759,6 +765,7 @@
     }
     async function saveRecord() {
       state.memo = $("memo").value;
+      state.updatedAt = new Date().toISOString();
       const db = await openDb();
       const tx = db.transaction(STORE_NAME, "readwrite");
       tx.objectStore(STORE_NAME).put(JSON.parse(JSON.stringify(state)));
@@ -782,7 +789,7 @@
       const records = await allRecords();
       $("history").innerHTML = records.length ? records.map((record) => `
         <div class="history-row">
-          <button class="btn" data-load="${record.id}">${new Date(record.measuredAt).toLocaleString("ja-JP")}<br><small>${escapeHtml((record.memo || "メモなし").slice(0, 20))}</small></button>
+          <button class="btn" data-load="${record.id}">計測 ${new Date(record.measuredAt).toLocaleString("ja-JP")}<br><small>更新 ${new Date(record.updatedAt || record.measuredAt).toLocaleString("ja-JP")}</small><br><small>${escapeHtml((record.memo || "メモなし").slice(0, 20))}</small></button>
           <button class="btn" data-delete="${record.id}">削除</button>
         </div>
       `).join("") : "<p>保存済みの記録はありません。</p>";
@@ -809,8 +816,8 @@
     }
     async function exportCsv() {
       const keys = Object.keys(fields);
-      const rows = [["id", "measured_at", "memo", ...keys]];
-      (await allRecords()).forEach((record) => rows.push([record.id, record.measuredAt, record.memo || "", ...keys.map((key) => record.values[key]?.value ?? "")]));
+      const rows = [["id", "measured_at", "updated_at", "memo", ...keys]];
+      (await allRecords()).forEach((record) => rows.push([record.id, record.measuredAt, record.updatedAt || record.measuredAt, record.memo || "", ...keys.map((key) => record.values[key]?.value ?? "")]));
       const blob = new Blob([rows.map(csvRow).join("\n")], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
