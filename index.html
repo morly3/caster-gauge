@@ -106,6 +106,8 @@
       width: 78%;
       justify-self: center;
     }
+    .cell[data-key$="Pressure"].pressure-empty { background: #ffd6e7; }
+    .cell[data-key$="Pressure"].pressure-filled { background: #cfefff; }
     .cell {
       min-height: 78px;
       border: 2px solid var(--line);
@@ -594,6 +596,11 @@
       Object.keys(fields).forEach((key) => {
         const meta = fields[key];
         const value = val(key);
+        const cell = document.querySelector(`[data-key="${key}"]`);
+        if (meta.pressure && cell) {
+          cell.classList.toggle("pressure-empty", !Number.isFinite(value));
+          cell.classList.toggle("pressure-filled", Number.isFinite(value));
+        }
         if (!Number.isFinite(value)) {
           setMain(key, "--");
           const sub = $(`${key}Sub`);
