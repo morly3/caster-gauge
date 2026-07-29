@@ -1068,7 +1068,7 @@
       state.activeStillSessionId = null;
       state.nextSessionId = 1;
       playCaptureSound();
-      setStatus("静止を検出して直進基準を記録しました。続けて測定点を自動追加します。");
+      setStatus("ハンドルを切って止めるを繰り返し、できるだけ広い範囲でデータを取得してください。");
       maybeAutoAddPoint(true);
       render();
     }
@@ -1758,10 +1758,10 @@
       }
       const sessionCount = buildSessionRepresentatives(state.points).length;
       if (sessionCount < MIN_FIT_SESSIONS) {
-        els.mountStatus.textContent = `準備完了。あと ${MIN_FIT_SESSIONS - sessionCount} 位置で自動推定`;
+        els.mountStatus.textContent = `ハンドルを切って止めるを繰り返し、できるだけ広い範囲でデータを取得してください。あと ${MIN_FIT_SESSIONS - sessionCount} 位置で自動推定します`;
         return;
       }
-      els.mountStatus.textContent = "準備完了。静止ごとに2回取得して1位置に集約";
+      els.mountStatus.textContent = "ハンドルを切って止めるを繰り返し、できるだけ広い範囲でデータを取得してください。";
     }
 
     function renderResult() {
