@@ -171,6 +171,8 @@
     .wheel.left { left: 10%; transform: rotate(12deg); }
     .wheel.right { right: 10%; transform: rotate(-12deg); }
     .axle-label { position: relative; z-index: 1; font-size: 22px; }
+    .front-camber-axle .axle-label { transform: translateY(6px); }
+    .rear-camber-axle .axle-label { transform: translateY(6px); }
     .caster-icon {
       position: relative;
       width: 128px;
@@ -209,6 +211,8 @@
       right: 0;
       font-size: 14px;
     }
+    .front-camber-axle .side-diff { bottom: 2px; }
+    .rear-camber-axle .side-diff { bottom: 2px; }
     .toe-center {
       min-height: 0;
       border: 2px solid #09b66a;
@@ -412,7 +416,7 @@
     <section class="band">
       <div class="row">
         <button class="cell" data-key="flCamber"><span class="cell-title">FL キャンバー</span><span class="cell-main" id="flCamberMain">--</span><span class="cell-sub" id="flCamberSub">換算 --</span></button>
-        <div class="axle"><div class="bar"></div><div class="wheel left"></div><div class="wheel right"></div><div class="axle-label">Front</div><div class="side-diff">左右差 <b id="frontCamberDiff">--</b></div></div>
+        <div class="axle front-camber-axle"><div class="bar"></div><div class="wheel left"></div><div class="wheel right"></div><div class="axle-label">Front</div><div class="side-diff">左右差 <b id="frontCamberDiff">--</b></div></div>
         <button class="cell" data-key="frCamber"><span class="cell-title">FR キャンバー</span><span class="cell-main" id="frCamberMain">--</span><span class="cell-sub" id="frCamberSub">換算 --</span></button>
       </div>
     </section>
@@ -471,7 +475,7 @@
     <section class="band">
       <div class="row">
         <button class="cell" data-key="rlCamber"><span class="cell-title">RL キャンバー</span><span class="cell-main" id="rlCamberMain">--</span><span class="cell-sub" id="rlCamberSub">換算 --</span></button>
-        <div class="axle"><div class="bar"></div><div class="wheel left"></div><div class="wheel right"></div><div class="axle-label">Rear</div><div class="side-diff">左右差 <b id="rearCamberDiff">--</b></div></div>
+        <div class="axle rear-camber-axle"><div class="bar"></div><div class="wheel left"></div><div class="wheel right"></div><div class="axle-label">Rear</div><div class="side-diff">左右差 <b id="rearCamberDiff">--</b></div></div>
         <button class="cell" data-key="rrCamber"><span class="cell-title">RR キャンバー</span><span class="cell-main" id="rrCamberMain">--</span><span class="cell-sub" id="rrCamberSub">換算 --</span></button>
       </div>
     </section>
