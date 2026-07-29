@@ -285,10 +285,6 @@
       grid-column: 1 / -1;
     }
 
-    .status-panel {
-      min-height: 42px;
-    }
-
     .good {
       color: var(--good);
     }
@@ -390,6 +386,24 @@
   </header>
 
   <main>
+    <section class="panel">
+      <div class="settings">
+        <div class="field mount-field">
+          <span class="label">次の操作</span>
+          <div class="status next-action" id="mountStatus">画面をホイール外側へ向けて立てます</div>
+        </div>
+        <label class="field stillness-field">
+          <span class="label">静止判定</span>
+          <select id="stillnessLevel">
+            <option value="standard" selected>標準（直近1.2秒を判定・平均）</option>
+            <option value="vibrationLow">振動対応・弱（直近3秒を判定・平均）</option>
+            <option value="vibrationHigh">振動対応・強（直近5秒を判定・平均）</option>
+          </select>
+          <span class="status" id="stillnessDetail">判定データ待ち</span>
+        </label>
+      </div>
+    </section>
+
     <section class="toolbar">
       <button id="permissionBtn" class="primary primary-action">1 センサー許可</button>
       <button id="baselineBtn" class="primary-action">2 直進基準取得</button>
@@ -403,37 +417,12 @@
 
     <div class="app-grid">
       <div>
-        <section class="panel">
-          <div class="settings">
-            <div class="field mount-field">
-              <span class="label">次の操作</span>
-              <div class="status next-action" id="mountStatus">画面をホイール外側へ向けて立てます</div>
-            </div>
-            <label class="field stillness-field">
-              <span class="label">静止判定</span>
-              <select id="stillnessLevel">
-                <option value="standard" selected>標準（直近1.2秒を判定・平均）</option>
-                <option value="vibrationLow">振動対応・弱（直近3秒を判定・平均）</option>
-                <option value="vibrationHigh">振動対応・強（直近5秒を判定・平均）</option>
-              </select>
-              <span class="status" id="stillnessDetail">判定データ待ち</span>
-            </label>
-            <label class="check">
-              <input id="reverseForward" type="checkbox">
-              前方向を反転
-            </label>
-          </div>
-        </section>
-
         <section class="panel result top-result">
           <div class="label">キャスター角</div>
           <div class="value" id="caster">--</div>
           <div class="status" id="signHint">表示は絶対値です</div>
         </section>
 
-        <section class="panel status-panel">
-          <div class="status" id="status">センサー許可を押してください。iOS ではユーザー操作からの許可が必要です。</div>
-        </section>
       </div>
 
       <div>
@@ -618,11 +607,10 @@
       quality: document.getElementById("quality"),
       uncertainty: document.getElementById("uncertainty"),
       pointCount: document.getElementById("pointCount"),
-      status: document.getElementById("status"),
+      status: document.getElementById("mountStatus"),
       pointRows: document.getElementById("pointRows"),
       signHint: document.getElementById("signHint"),
       mountStatus: document.getElementById("mountStatus"),
-      reverseForward: document.getElementById("reverseForward"),
       stillnessLevel: document.getElementById("stillnessLevel"),
       permissionBtn: document.getElementById("permissionBtn"),
       baselineBtn: document.getElementById("baselineBtn"),
@@ -796,10 +784,7 @@
         }
       }
 
-      let forward = normalize(cross(verticalUp, lateral));
-      if (els.reverseForward.checked) {
-        forward = scale(forward, -1);
-      }
+      const forward = normalize(cross(verticalUp, lateral));
 
       return { verticalUp, wheelNormalPhone, lateral, forward };
     }
@@ -1843,7 +1828,7 @@
 
     function setStatus(message, type = "") {
       els.status.textContent = message;
-      els.status.className = `status ${type}`.trim();
+      els.status.className = `status next-action ${type}`.trim();
     }
 
     function removeLastPoint() {
@@ -2181,13 +2166,6 @@
       state.lastAutoAddAt = 0;
       setStatus(`${els.stillnessLevel.selectedOptions[0].textContent}へ変更しました。新しい判定用データを蓄積します。`);
       render();
-    });
-    [els.reverseForward].forEach((el) => {
-      el.addEventListener("change", () => {
-        state.result = null;
-        updateFitIfReady();
-        render();
-      });
     });
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && (state.autoAddEnabled || state.baselinePending)) {
