@@ -167,9 +167,11 @@
       height: 54px;
       border-radius: 7px;
       background: #111827;
+      transform-origin: center;
+      transition: transform .18s ease;
     }
-    .wheel.left { left: 10%; transform: rotate(12deg); }
-    .wheel.right { right: 10%; transform: rotate(-12deg); }
+    .wheel.left { left: 10%; transform: rotate(var(--left-camber-angle, 0deg)); }
+    .wheel.right { right: 10%; transform: rotate(var(--right-camber-angle, 0deg)); }
     .axle-label { position: relative; z-index: 1; font-size: 22px; }
     .front-camber-axle .axle-label { transform: translateY(6px); }
     .rear-camber-axle .axle-label { transform: translateY(6px); }
@@ -646,10 +648,24 @@
       $("frontCamberDiff").textContent = Number.isFinite(val("flCamber") - val("frCamber")) ? camberText(val("flCamber") - val("frCamber")) : "--";
       $("rearCamberDiff").textContent = Number.isFinite(val("rlCamber") - val("rrCamber")) ? camberText(val("rlCamber") - val("rrCamber")) : "--";
       $("wheelbaseDiff").textContent = Number.isFinite(val("leftWheelbase") - val("rightWheelbase")) ? mm(val("leftWheelbase") - val("rightWheelbase"), 0) : "--";
+      updateCamberAxle("front", val("flCamber"), val("frCamber"));
+      updateCamberAxle("rear", val("rlCamber"), val("rrCamber"));
     }
     function setTotal(mainId, subId, value, axle) {
       $(mainId).textContent = Number.isFinite(value) ? toeText(value) : "--";
       $(subId).textContent = toeConverted(value, axle);
+    }
+    function camberWheelAngle(value, side = "left") {
+      if (!Number.isFinite(value) || value === 0) return "0deg";
+      const direction = side === "right" ? 1 : -1;
+      const angle = Math.max(-14, Math.min(14, value * 6 * direction));
+      return `${angle.toFixed(1)}deg`;
+    }
+    function updateCamberAxle(axle, leftValue, rightValue) {
+      const el = document.querySelector(`.${axle}-camber-axle`);
+      if (!el) return;
+      el.style.setProperty("--left-camber-angle", camberWheelAngle(leftValue, "left"));
+      el.style.setProperty("--right-camber-angle", camberWheelAngle(rightValue, "right"));
     }
     function openInput(key) {
       editingKey = key;
