@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>簡易アライメントゲージ用記録ツール v0.3.1</title>
+  <title>簡易アライメントゲージ用記録ツール v0.3.2</title>
   <style>
     :root {
       --bg: #000;
@@ -249,6 +249,9 @@
     .toe-summary .converted-value {
       color: #111;
       font-size: 18px;
+    }
+    .toe-summary .unit {
+      font-size: .78em;
     }
     .toe-summary.rear-summary {
       transform: translateY(-120px);
@@ -612,6 +615,9 @@
       if (value === 0) return "0.0mm";
       return `${value > 0 ? "In" : "Out"} ${Math.abs(value).toFixed(1)} mm`;
     }
+    function smallToeUnit(text) {
+      return text.replace(/ ?mm/g, ' <span class="unit">mm</span>');
+    }
     function val(key) {
       const value = state.values[key]?.value;
       return Number.isFinite(value) ? value : NaN;
@@ -672,8 +678,8 @@
       updateToeWheel("rrToeWheel", val("rrToe"), "right", "rear");
     }
     function setTotal(mainId, subId, value, axle) {
-      $(mainId).textContent = Number.isFinite(value) ? toeText(value) : "--";
-      $(subId).textContent = toeConverted(value, axle);
+      $(mainId).innerHTML = Number.isFinite(value) ? smallToeUnit(toeText(value)) : "--";
+      $(subId).innerHTML = smallToeUnit(toeConverted(value, axle));
     }
     function camberWheelAngle(value, side = "left") {
       if (!Number.isFinite(value) || value === 0) return "0deg";
