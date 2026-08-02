@@ -5,10 +5,12 @@ version_file="index.html"
 tmp_file="${version_file}.tmp"
 
 awk '
-  !updated && match($0, /v[0-9]+\.[0-9]+\.[0-9]+/) {
+  !updated && /<h1>/ && match($0, /v[[:space:]]*[0-9]+\.[0-9]+\.[0-9]+/) {
     old = substr($0, RSTART, RLENGTH)
-    split(substr(old, 2), parts, ".")
-    next_version = "v" parts[1] "." parts[2] "." (parts[3] + 1)
+    version_number = old
+    sub(/^v[[:space:]]*/, "", version_number)
+    split(version_number, parts, ".")
+    next_version = "v " parts[1] "." parts[2] "." (parts[3] + 1)
     $0 = substr($0, 1, RSTART - 1) next_version substr($0, RSTART + RLENGTH)
     updated = 1
     printf "Bumped %s: %s -> %s\n", FILENAME, old, next_version > "/dev/stderr"
@@ -16,7 +18,7 @@ awk '
   { print }
   END {
     if (!updated) {
-      print "No version like v0.3.0 found in index.html" > "/dev/stderr"
+      print "No h1 version like v 0.3.0 found in index.html" > "/dev/stderr"
       exit 1
     }
   }
