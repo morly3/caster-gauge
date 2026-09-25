@@ -403,7 +403,7 @@
 <body>
   <main class="app">
     <header>
-      <h1><a href="https://note.com/mk_morly/n/na2ac85d692a2" target="_blank" rel="noopener noreferrer">アライメントゲージの説明はこちら</a> v 0.3.3</h1>
+      <h1><a href="https://note.com/mk_morly/n/na2ac85d692a2" target="_blank" rel="noopener noreferrer">アライメントゲージの説明はこちら</a> v 0.3.4</h1>
     </header>
 
     <div class="date">
@@ -533,6 +533,12 @@
       <div class="diameter-readout"><span>リアタイヤの外径</span><b id="rearDiameter">--</b></div>
     </div>
     <div class="modal-actions" style="margin-top:16px"><button class="btn" id="cancelSettings">キャンセル</button><button class="btn primary" id="applySettings">保存</button></div>
+  </div></dialog>
+
+  <dialog id="saveDialog"><div class="modal">
+    <h2>測定結果を保存</h2>
+    <p>読み込んだ記録に上書きしますか？ 別の記録として残す場合は新規保存を選んでください。</p>
+    <div class="modal-actions" style="margin-top:16px"><button class="btn" id="cancelSave">キャンセル</button><button class="btn" id="saveAsNew">新規保存</button><button class="btn primary" id="overwriteSave">上書き保存</button></div>
   </div></dialog>
 
   <dialog id="listDialog"><div class="modal">
@@ -829,16 +835,29 @@
         req.onerror = () => reject(req.error);
       });
     }
-    async function saveRecord() {
-      state.memo = $("memo").value;
-      state.updatedAt = new Date().toISOString();
+    async function saveRecord(mode) {
+      const saved = (await allRecords()).some((record) => record.id === state.id);
+      if (!mode && saved) {
+        $("saveDialog").showModal();
+        return;
+      }
+      const now = new Date().toISOString();
+      const record = JSON.parse(JSON.stringify(state));
+      record.memo = $("memo").value;
+      record.updatedAt = now;
+      if (mode === "new") {
+        record.id = crypto.randomUUID();
+        record.measuredAt = now;
+      }
       const db = await openDb();
       const tx = db.transaction(STORE_NAME, "readwrite");
-      tx.objectStore(STORE_NAME).put(JSON.parse(JSON.stringify(state)));
+      tx.objectStore(STORE_NAME).put(record);
       await new Promise((resolve, reject) => {
         tx.oncomplete = resolve;
         tx.onerror = () => reject(tx.error);
       });
+      Object.assign(state, record);
+      $("saveDialog").close();
       saveDraft();
       render();
       alert("測定結果を保存しました。");
@@ -1026,7 +1045,10 @@
       state.memo = $("memo").value;
       saveDraft();
     });
-    $("saveBtn").addEventListener("click", saveRecord);
+    $("saveBtn").addEventListener("click", () => saveRecord());
+    $("cancelSave").addEventListener("click", () => $("saveDialog").close());
+    $("saveAsNew").addEventListener("click", () => saveRecord("new"));
+    $("overwriteSave").addEventListener("click", () => saveRecord("overwrite"));
     $("listBtn").addEventListener("click", showList);
     $("closeList").addEventListener("click", () => $("listDialog").close());
     $("importCsv").addEventListener("click", () => $("importCsvFile").click());
